@@ -20,16 +20,24 @@ memory.limit(size=50000000)
 #-----------------------------------------------------------------------------
 
 # data source
-path<-"Z:/Modelcomparison/Part1/"
+path<-here("Part1/")
 func_group<- c('bushmeat','medical','pollinator')
 
 # Input/output directories
-predictors_dir <- paste(path,"Part1_predictors/",func_group[[1]],"_predictors",sep='')
-predictors_LU_dir <- paste(path,"Part1_predictors/MODIS/",sep='')
-occurrence_dir <- paste(path,"Part1_occurrence/",func_group[[1]],"/",func_group[[1]],"_occurrence_in/",sep='')
-background_file <- paste(occurrence_dir,func_group[[1]],"_background/new_",func_group[[1]],"_background.csv",sep='')
-outdir_SDM <- paste(path,"Part1_occurrence/",func_group[[1]],"/",func_group[[1]],"_output/",func_group[[1]],"_output_SDM/",sep='')
-outdir_LU <- paste(path,"Part1_occurrence/",func_group[[1]],"/",func_group[[1]],"_output/",func_group[[1]],"_output_LU/",sep='')
+predictors_dir <- paste(path,"/Part1_predictors/",func_group[1],"_predictors",sep='')
+predictors_LU_dir <- paste(path,"/Part1_predictors/MODIS/",sep='')
+occurrence_dir <- paste(path,"/Part1_occurrence/",func_group[1],"/",func_group[1],"_occurrence_in/",sep='')
+background_file <- paste(occurrence_dir,func_group[1],"_background/new_",func_group[1],"_background.csv",sep='')
+
+if(!dir.exists(paste(path,"/Part1_occurrence/",func_group[1],"/",func_group[1],"_output/",func_group[1],"_output_SDM/",sep=''))){
+  dir.create(paste(path,"/Part1_occurrence/",func_group[1],"/",func_group[1],"_output/",func_group[1],"_output_SDM/",sep=''), recursive = T)
+}
+outdir_SDM <- paste(path,"/Part1_occurrence/",func_group[1],"/",func_group[1],"_output/",func_group[1],"_output_SDM/",sep='')
+
+if(!dir.exists(paste(path,"/Part1_occurrence/",func_group[1],"/",func_group[1],"_output/",func_group[1],"_output_LU/",sep=''))){
+  dir.create(paste(path,"/Part1_occurrence/",func_group[1],"/",func_group[1],"_output/",func_group[1],"_output_LU/",sep=''), recursive = T)
+}
+outdir_LU <- paste(path,"/Part1_occurrence/",func_group[1],"/",func_group[1],"_output/",func_group[1],"_output_LU/",sep='')
 
 
 #-----------------------------------------------------------------------------
