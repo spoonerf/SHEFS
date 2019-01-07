@@ -139,30 +139,32 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       
       evl_bc<- list()
       
-      cl <- makeCluster(detectCores(), type='PSOCK')
+      cl <- makeCluster((detectCores()-1), type='PSOCK')
       registerDoParallel(cl)
-      clusterExport(cl,c('bioclim', 'evaluate', 'evl_bc', 'threshold', 'predict'))
+      clusterExport(cl,c('bioclim', 'evaluate', 'threshold', 'predict', 'backgr','group_pres', 'group_bg', 'evl_bc', 
+                         'outdir_SDM', 'species_name', 'predictors', 'ext', 'occurrence_lonlat'))
       
-      eval_bc<-foreach(i = 1:k, .combine = 'c') %dopar% {
-        pres_train<-occurrence_lonlat[group_pres!=i,]
-        pres_test<-occurrence_lonlat[group_pres==i,]
-        backg_test<-backgr[group_bg==i,]
+      eval_bc<-parLapply(cl, 1:k, function(kf){
+        pres_train<-occurrence_lonlat[group_pres!=kf,]
+        pres_test<-occurrence_lonlat[group_pres==kf,]
+        backg_test<-backgr[group_bg==kf,]
         bc <- bioclim(predictors,pres_train)
-        evl_bc[[i]] <- dismo:::evaluate(pres_test, backg_test, bc,predictors,type="response")
+        evl_bc[[kf]] <- dismo:::evaluate(pres_test, backg_test, bc,predictors,type="response")
         
-        saveRDS(evl_bc, file = paste(outdir_SDM,species_name,"_eval_bc_",i,".ascii",sep=''),ascii=TRUE)
+        saveRDS(evl_bc, file = paste(outdir_SDM,species_name,"_eval_bc_",kf,".ascii",sep=''),ascii=TRUE)
         
-        tr_bc <- threshold(evl_bc[[i]], 'spec_sens')
-        saveRDS(tr_bc, file = paste(outdir_SDM,species_name,"_tr_bc_",i, ".ascii",sep=''),ascii=TRUE)
+        tr_bc <- threshold(evl_bc[[kf]], 'spec_sens')
+        saveRDS(tr_bc, file = paste(outdir_SDM,species_name,"_tr_bc_",kf, ".ascii",sep=''),ascii=TRUE)
         
         predict_bioclim <- predict(predictors, bc, ext=ext, progress='')
-        saveRDS( predict_bioclim, file = paste(outdir_SDM,species_name,"_predict_bioclim_raw_",i,".ascii",sep=''),ascii=TRUE)
+        saveRDS( predict_bioclim, file = paste(outdir_SDM,species_name,"_predict_bioclim_raw_",kf,".ascii",sep=''),ascii=TRUE)
         
         predict_bioclim_pa <- predict_bioclim > tr_bc
-        saveRDS( predict_bioclim_pa, file = paste(outdir_SDM,species_name,"_predict_bioclim_pa_",i,".ascii",sep=''),ascii=TRUE)
+        saveRDS(predict_bioclim_pa, file = paste(outdir_SDM,species_name,"_predict_bioclim_pa_",kf,".ascii",sep=''),ascii=TRUE)
         
-        print(evl_bc[[i]])
+        print(evl_bc[[kf]])
       }
+      )
       stopCluster(cl)
       
       auc_bc <- sapply(eval_bc, function(x){slot(x, "auc")} )
@@ -198,44 +200,45 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       
       model_glm <- which(AICs==min(AICs))   
       
+      model_glm <- model_glm1[[model_glm]]
       
       
       evl_glm<- list()
       
-      cl <- makeCluster((detectCores()-2), type='PSOCK')
+      cl <- makeCluster((detectCores()-1), type='PSOCK')
       registerDoParallel(cl)
-      clusterExport(cl,c('bioclim', 'evaluate', 'threshold', 'predict'))
+      clusterExport(cl,c('bioclim', 'evaluate', 'threshold', 'predict', 'envpres_pa', 
+                         'envbackg_pa', 'group_pres', 'group_bg', 'model_glm', 'evl_glm', 
+                         'outdir_SDM', 'species_name', 'predictors', 'ext'))
       
-      eval_glm<-foreach(i = 1:k, .combine = 'c') %dopar% {
-        
-        start<-Sys.time()
-        pres_train<-envpres_pa[group_pres!=i ,]
-        pres_test<-envpres_pa[(group_pres==i) ,]
-        back_test<-envbackg_pa[(group_bg==i),]
-        back_train<-envbackg_pa[(group_bg!=i),]
-        envtrain<-rbind(pres_train, back_train)
-        
-        yy<-names(coef(model_glm1[[model_glm]]))[-1]
-        fla<-paste("pa ~", paste(yy, collapse="+"))
-        model_glm_out<-glm(as.formula(fla),family=binomial(link = "logit"), data=envtrain)
-        evl_glm[[i]] <- evaluate(pres_test, back_test,model= model_glm_out,type="response")
-        saveRDS(evl_glm[[i]], file = paste(outdir_SDM,species_name,"_eval_glm",i,".ascii",sep=''),ascii=TRUE)
-        
-        tr_glm <- threshold(evl_glm[[i]], 'spec_sens')
-        saveRDS(tr_glm, file = paste(outdir_SDM,species_name,"_tr_glm",i,".ascii",sep=''),ascii=TRUE)
-        
-        predict_glm <- predict(predictors, model_glm1[[model_glm]], ext=ext)   #adding in conversion back from logit space
-        predict_glm <-raster:::calc(predict_glm, fun=function(x){ exp(x)/(1+exp(x))}) 
-        saveRDS( predict_glm, file = paste(outdir_SDM,species_name,"_predict_glm_raw",i,".ascii",sep=''),ascii=TRUE)
-        
-        predict_glm_pa <- predict_glm > tr_glm
-        saveRDS(predict_glm_pa, file = paste(outdir_SDM,species_name,"_predict_glm_pa",i,".ascii",sep=''),ascii=TRUE)
-        end<-Sys.time()
-        end - start
-        print(evl_glm[[i]])
+      eval_glm<-parLapply(cl, 1:k, function(kf){
+              pres_train<-envpres_pa[group_pres!=kf ,]
+              pres_test<-envpres_pa[(group_pres==kf) ,]
+              back_test<-envbackg_pa[(group_bg==kf),]
+              back_train<-envbackg_pa[(group_bg!=kf),]
+              envtrain<-rbind(pres_train, back_train)
+              
+              yy<-names(coef(model_glm))[-1]
+              fla<-paste("pa ~", paste(yy, collapse="+"))
+              model_glm_out<-glm(as.formula(fla),family=binomial(link = "logit"), data=envtrain)
+              evl_glm[[kf]] <- evaluate(pres_test, back_test,model= model_glm_out,type="response")
+              saveRDS(evl_glm[[kf]], file = paste(outdir_SDM,species_name,"_eval_glm",kf,".ascii",sep=''),ascii=TRUE)
+              
+              tr_glm <- threshold(evl_glm[[kf]], 'spec_sens')
+              saveRDS(tr_glm, file = paste(outdir_SDM,species_name,"_tr_glm",kf,".ascii",sep=''),ascii=TRUE)
+              
+              predict_glm <- predict(predictors, model_glm, ext=ext)   #adding in conversion back from logit space
+              predict_glm <-raster:::calc(predict_glm, fun=function(x){ exp(x)/(1+exp(x))}) 
+              saveRDS( predict_glm, file = paste(outdir_SDM,species_name,"_predict_glm_raw",kf,".ascii",sep=''),ascii=TRUE)
+              
+              predict_glm_pa <- predict_glm > tr_glm
+              saveRDS(predict_glm_pa, file = paste(outdir_SDM,species_name,"_predict_glm_pa",kf,".ascii",sep=''),ascii=TRUE)
+              print(evl_glm[[kf]])
       }
+      )
       
       stopCluster(cl)
+      
       
       auc_gam <- sapply(eval_glm, function(x){slot(x, "auc")} )
       print(auc_gam)
