@@ -13,6 +13,7 @@ library(randomForest)
 library(kernlab)
 library(rJava)
 library(doParallel)
+library(here)
 
 memory.limit(size=50000000)
 #-----------------------------------------------------------------------------
@@ -61,7 +62,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
 #also may be better to have separate names for both group objects
 
     #for (s in 1:length(species)){}
-      s=15
+    s=15
       occurrence_in <- read.csv(paste(occurrence_dir, species[s], sep=''))
       species_name <- substr(species[s],14,nchar(species[s])-4)   #this could be more reproducible although need to think of a way
       coordinates(occurrence_in) <- ~lon+lat
@@ -93,9 +94,11 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       crs(background_in) <- "+proj=longlat +datum=WGS84 +no_defs"
       background_raster <- rasterize(background_in, predictors[[1]], 'X', fun = min)
       background_raster_sp<-crop(background_raster, ext) ##added this so all background points are within the same extent as the models
+      
       set.seed(0)
       backgr <- randomPoints(background_raster_sp, 1000) #removed !is.na as the function automatically excludes NA points and '!is.na' was cancelling it out somehow!
       colnames(backgr) = c('lon', 'lat')
+      
       set.seed(0)
       group_bg <- kfold(backgr, k=k)
       # backg_train <- backgr[group_bg != 1, ]
@@ -179,11 +182,11 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
         xx = combn(vars,i)
         if(is.null(dim(xx))){
           fla = paste("pa ~", paste(xx, collapse="+"))
-          model_glm1[[length(model_glm1)+1]]=glm(as.formula(fla),family=binomial(link = "logit"), data=envtrain)
+          model_glm1[[length(model_glm1)+1]]=glm(as.formula(fla),family=binomial(link = "logit"), data=env_all)
         } else {
           for(j in 1:dim(xx)[2]){
             fla = paste("pa ~", paste(xx[1:dim(xx)[1],j], collapse="+"))
-            model_glm1[[length(model_glm1)+1]]=glm(as.formula(fla),family=binomial(link = "logit"), data=envtrain) 
+            model_glm1[[length(model_glm1)+1]]=glm(as.formula(fla),family=binomial(link = "logit"), data=env_all) 
           }
         }
       }
@@ -204,6 +207,8 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       clusterExport(cl,c('bioclim', 'evaluate', 'threshold', 'predict'))
       
       eval_glm<-foreach(i = 1:k, .combine = 'c') %dopar% {
+        
+        start<-Sys.time()
         pres_train<-envpres_pa[group_pres!=i ,]
         pres_test<-envpres_pa[(group_pres==i) ,]
         back_test<-envbackg_pa[(group_bg==i),]
@@ -225,7 +230,8 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
         
         predict_glm_pa <- predict_glm > tr_glm
         saveRDS(predict_glm_pa, file = paste(outdir_SDM,species_name,"_predict_glm_pa",i,".ascii",sep=''),ascii=TRUE)
-        
+        end<-Sys.time()
+        end - start
         print(evl_glm[[i]])
       }
       
