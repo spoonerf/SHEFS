@@ -94,6 +94,15 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       crs(background_in) <- "+proj=longlat +datum=WGS84 +no_defs"
       background_raster <- rasterize(background_in, predictors[[1]], 'X', fun = min)
       background_raster_sp<-crop(background_raster, ext) ##added this so all background points are within the same extent as the models
+      background_raster_sp[!is.na(background_raster_sp)]<-1
+      
+      #ensuring the background data are at locations for which there is environmental data available in all the layers
+      a<-calc(predictors, is.na)
+      a<-calc(a, sum)
+      values(a)<-ifelse(values(a) ==0,1,NA)
+      
+      background_raster_sp<-a+background_raster_sp
+      
       
       set.seed(0)
       backgr <- randomPoints(background_raster_sp, 1000) #removed !is.na as the function automatically excludes NA points and '!is.na' was cancelling it out somehow!
@@ -123,6 +132,8 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       envbackg_pa<-cbind(0, envbackg)
       colnames(envpres_pa)[1]<-"pa"
       colnames(envbackg_pa)[1]<-"pa"
+      
+      
       env_all<-rbind(envpres_pa, envbackg_pa)
   
       
@@ -207,7 +218,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       
       cl <- makeCluster((detectCores()-1), type='PSOCK')
       registerDoParallel(cl)
-      clusterExport(cl,c('bioclim', 'evaluate', 'threshold', 'predict', 'envpres_pa', 
+      clusterExport(cl,c('evaluate', 'threshold', 'predict', 'envpres_pa', 
                          'envbackg_pa', 'group_pres', 'group_bg', 'model_glm', 'evl_glm', 
                          'outdir_SDM', 'species_name', 'predictors', 'ext'))
       
@@ -240,10 +251,10 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       stopCluster(cl)
       
       
-      auc_gam <- sapply(eval_glm, function(x){slot(x, "auc")} )
-      print(auc_gam)
+      auc_glm <- sapply(eval_glm, function(x){slot(x, "auc")} )
+      print(auc_glm)
       
-      gam_auc<-mean(auc_gam)
+      glm_auc<-mean(auc_glm)
       
       
       print(paste('GLM done'))
@@ -256,28 +267,40 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       jar <- paste(system.file(package="dismo"), "/java/maxent.jar", sep='')
       
       
-      eval_ma<- list()
-      for (i in 1:k){
-        pres_train<-occurrence_lonlat[group_pres!=i ,]
-        pres_test<-occurrence_lonlat[(group_pres==i) ,]
-        back_test<-backgr[(group_bg==i),]
-        back_train<-backgr[(group_bg!=i),]
+      evl_ma<- list()
+      
+      cl <- makeCluster((detectCores()-1), type='PSOCK')
+      registerDoParallel(cl)
+      clusterExport(cl,c('maxent', 'evaluate', 'threshold', 'predict', 'occurrence_lonlat', 
+                         'backgr', 'group_pres', 'group_bg','outdir_SDM', 'species_name', 
+                         'predictors', 'ext', 'evl_ma'))
+      
+      eval_ma<-parLapply(cl, 1:k, function(kf){
+        pres_train<-occurrence_lonlat[group_pres!=kf ,]
+        pres_test<-occurrence_lonlat[(group_pres==kf) ,]
+        back_test<-backgr[(group_bg==kf),]
+        back_train<-backgr[(group_bg!=kf),]
         model_ma <- maxent(predictors, pres_train)#,l1_regularizer=0.7)
-        saveRDS(model_ma, file = paste(outdir_SDM,species_name,"_model_ma_",i,".ascii",sep=''),ascii=TRUE)
+        saveRDS(model_ma, file = paste(outdir_SDM,species_name,"_model_ma_",kf,".ascii",sep=''),ascii=TRUE)
         
-        eval_ma[[i]] <- evaluate(pres_test, back_test,model= model_ma,x = predictors)
+        evl_ma[[kf]] <- evaluate(pres_test, back_test,model= model_ma,x = predictors)
         
-        saveRDS(eval_ma[[i]], file = paste(outdir_SDM,species_name,"_eval_ma",i,".ascii",sep=''),ascii=TRUE)
-        tr_ma <- threshold(eval_ma[[i]], 'spec_sens')
-        saveRDS(tr_ma, file = paste(outdir_SDM,species_name,"_tr_ma",i,".ascii",sep=''),ascii=TRUE)
-        predict_maxent <- predict(model_ma, predictors,ext=ext)  
-        saveRDS(predict_maxent, file = paste(outdir_SDM,species_name,"_predict_maxent_raw_",i,".ascii",sep=''),ascii=TRUE)
-        plot(predict_maxent)
-        predict_maxent_pa <- predict_maxent >tr_ma
-        plot(predict_maxent_pa)
-        saveRDS(predict_maxent_pa, file = paste(outdir_SDM,species_name,"_predict_maxent_pa",i,".ascii",sep=''),ascii=TRUE)
-        print(i)
+        # saveRDS(evl_ma[[kf]], file = paste(outdir_SDM,species_name,"_eval_ma",kf,".ascii",sep=''),ascii=TRUE)
+        # tr_ma <- threshold(evl_ma[[kf]], 'spec_sens')
+        # saveRDS(tr_ma, file = paste(outdir_SDM,species_name,"_tr_ma",kf,".ascii",sep=''),ascii=TRUE)
+        # 
+        # predict_maxent <- predict(model_ma, predictors,ext=ext)  
+        # saveRDS(predict_maxent, file = paste(outdir_SDM,species_name,"_predict_maxent_raw_",kf,".ascii",sep=''),ascii=TRUE)
+        # 
+        # predict_maxent_pa <- predict_maxent >tr_ma
+        # saveRDS(predict_maxent_pa, file = paste(outdir_SDM,species_name,"_predict_maxent_pa",kf,".ascii",sep=''),ascii=TRUE)
+        
+        print(evl_ma[[kf]])
       }
+      )
+   
+  
+      stopCluster(cl)
       
       auc_ma <- sapply( eval_ma, function(x){slot(x, "auc")} )
       print(auc_ma)
@@ -406,7 +429,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       data(wrld_simpl)
       
       tiff(paste(outdir_SDM,species_name,'_ensemble_pa.tiff',sep=''))
-      plot(ensemble_raster,legend = FALSE, col = rev(terrain.colors(2)), main=paste('Weighted ensemble mean - ', species_name),xlab="longitue", ylab="latitude")
+      plot(ensemble_raster,legend = FALSE, col = rev(terrain.colors(2)), main=paste('Weighted ensemble mean - ', species_name),xlab="longitude", ylab="latitude")
       plot(wrld_simpl, add=TRUE)
       legend("bottomleft", legend = c("Absence", "Presence"),box.col = "white", fill = rev(terrain.colors(2)))
       box()
