@@ -3,7 +3,6 @@
 # SHEFS Species distribution model
 ##########################################################################
 
-###test###
 
 library(dismo)
 library(rgdal)  
@@ -162,17 +161,17 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
         bc <- bioclim(predictors,pres_train)
         evl_bc[[kf]] <- dismo:::evaluate(pres_test, backg_test, bc,predictors,type="response")
         
-        saveRDS(evl_bc, file = paste(outdir_SDM,species_name,"_eval_bc_",kf,".ascii",sep=''),ascii=TRUE)
-        
-        tr_bc <- threshold(evl_bc[[kf]], 'spec_sens')
-        saveRDS(tr_bc, file = paste(outdir_SDM,species_name,"_tr_bc_",kf, ".ascii",sep=''),ascii=TRUE)
-        
-        predict_bioclim <- predict(predictors, bc, ext=ext, progress='')
-        saveRDS( predict_bioclim, file = paste(outdir_SDM,species_name,"_predict_bioclim_raw_",kf,".ascii",sep=''),ascii=TRUE)
-        
-        predict_bioclim_pa <- predict_bioclim > tr_bc
-        saveRDS(predict_bioclim_pa, file = paste(outdir_SDM,species_name,"_predict_bioclim_pa_",kf,".ascii",sep=''),ascii=TRUE)
-        
+        # saveRDS(evl_bc, file = paste(outdir_SDM,species_name,"_eval_bc_",kf,".ascii",sep=''),ascii=TRUE)
+        # 
+        # tr_bc <- threshold(evl_bc[[kf]], 'spec_sens')
+        # saveRDS(tr_bc, file = paste(outdir_SDM,species_name,"_tr_bc_",kf, ".ascii",sep=''),ascii=TRUE)
+        # 
+        # predict_bioclim <- predict(predictors, bc, ext=ext, progress='')
+        # saveRDS( predict_bioclim, file = paste(outdir_SDM,species_name,"_predict_bioclim_raw_",kf,".ascii",sep=''),ascii=TRUE)
+        # 
+        # predict_bioclim_pa <- predict_bioclim > tr_bc
+        # saveRDS(predict_bioclim_pa, file = paste(outdir_SDM,species_name,"_predict_bioclim_pa_",kf,".ascii",sep=''),ascii=TRUE)
+        # 
         print(evl_bc[[kf]])
       }
       )
@@ -233,29 +232,27 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
               fla<-paste("pa ~", paste(yy, collapse="+"))
               model_glm_out<-glm(as.formula(fla),family=binomial(link = "logit"), data=envtrain)
               evl_glm[[kf]] <- evaluate(pres_test, back_test,model= model_glm_out,type="response")
-              saveRDS(evl_glm[[kf]], file = paste(outdir_SDM,species_name,"_eval_glm",kf,".ascii",sep=''),ascii=TRUE)
-              
-              tr_glm <- threshold(evl_glm[[kf]], 'spec_sens')
-              saveRDS(tr_glm, file = paste(outdir_SDM,species_name,"_tr_glm",kf,".ascii",sep=''),ascii=TRUE)
-              
-              predict_glm <- predict(predictors, model_glm, ext=ext)   #adding in conversion back from logit space
-              predict_glm <-raster:::calc(predict_glm, fun=function(x){ exp(x)/(1+exp(x))}) 
-              saveRDS( predict_glm, file = paste(outdir_SDM,species_name,"_predict_glm_raw",kf,".ascii",sep=''),ascii=TRUE)
-              
-              predict_glm_pa <- predict_glm > tr_glm
-              saveRDS(predict_glm_pa, file = paste(outdir_SDM,species_name,"_predict_glm_pa",kf,".ascii",sep=''),ascii=TRUE)
+              # saveRDS(evl_glm[[kf]], file = paste(outdir_SDM,species_name,"_eval_glm",kf,".ascii",sep=''),ascii=TRUE)
+              # 
+              # tr_glm <- threshold(evl_glm[[kf]], 'spec_sens')
+              # saveRDS(tr_glm, file = paste(outdir_SDM,species_name,"_tr_glm",kf,".ascii",sep=''),ascii=TRUE)
+              # 
+              # predict_glm <- predict(predictors, model_glm, ext=ext)   #adding in conversion back from logit space
+              # predict_glm <-raster:::calc(predict_glm, fun=function(x){ exp(x)/(1+exp(x))}) 
+              # saveRDS( predict_glm, file = paste(outdir_SDM,species_name,"_predict_glm_raw",kf,".ascii",sep=''),ascii=TRUE)
+              # 
+              # predict_glm_pa <- predict_glm > tr_glm
+              # saveRDS(predict_glm_pa, file = paste(outdir_SDM,species_name,"_predict_glm_pa",kf,".ascii",sep=''),ascii=TRUE)
               print(evl_glm[[kf]])
       }
       )
       
       stopCluster(cl)
       
-      
       auc_glm <- sapply(eval_glm, function(x){slot(x, "auc")} )
       print(auc_glm)
       
       glm_auc<-mean(auc_glm)
-      
       
       print(paste('GLM done'))
 
@@ -281,7 +278,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
         back_test<-backgr[(group_bg==kf),]
         back_train<-backgr[(group_bg!=kf),]
         model_ma <- maxent(predictors, pres_train)#,l1_regularizer=0.7)
-        saveRDS(model_ma, file = paste(outdir_SDM,species_name,"_model_ma_",kf,".ascii",sep=''),ascii=TRUE)
+        #saveRDS(model_ma, file = paste(outdir_SDM,species_name,"_model_ma_",kf,".ascii",sep=''),ascii=TRUE)
         
         evl_ma[[kf]] <- evaluate(pres_test, back_test,model= model_ma,x = predictors)
         
@@ -314,33 +311,41 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       print(paste('+++ Random forest +++'))
       print(paste('+++++++++++++++++++++'))
       
-      model_rf1 <- paste("pa ~", paste(names(predictors), collapse=" + "))
+      evl_rf<- list()
       
+      cl <- makeCluster((detectCores()-1), type='PSOCK')
+      registerDoParallel(cl)
+      clusterExport(cl,c('randomForest', 'evaluate', 'threshold', 'predict', 'envpres_pa', 
+                         'envbackg_pa', 'group_pres', 'group_bg','outdir_SDM', 'species_name', 
+                         'predictors', 'ext', 'evl_rf'))
       
-      eval_rf<- list()
-      for (i in 1:k){
-        pres_train<-envpres_pa[group_pres!=i ,]
-        pres_test<-envpres_pa[(group_pres==i) ,]
-        back_test<-envbackg_pa[(group_bg==i),]
-        back_train<-envbackg_pa[(group_bg!=i),]
+      eval_rf<-parLapply(cl, 1:k, function(kf){
+        pres_train<-envpres_pa[group_pres!=kf ,]
+        pres_test<-envpres_pa[(group_pres==kf) ,]
+        back_test<-envbackg_pa[(group_bg==kf),]
+        back_train<-envbackg_pa[(group_bg!=kf),]
         envtrain<-rbind(pres_train, back_train)
-        model_rf <- randomForest(as.formula(model_rf1), data=envtrain, na.action=na.roughfix) 
-        saveRDS(model_rf, file = paste(outdir_SDM,species_name,"_model_rf.ascii",sep=''),ascii=TRUE)
+        model_rf1 <- paste("pa ~", paste(names(predictors), collapse=" + "))
+        model_rf <- randomForest:::randomForest(as.formula(model_rf1), data=envtrain) 
+        #saveRDS(model_rf, file = paste(outdir_SDM,species_name,"_model_rf.ascii",sep=''),ascii=TRUE)
         
-        eval_rf[[i]] <- evaluate(pres_test, back_test,model= model_rf,type="response")
+        evl_rf[[kf]] <- evaluate(pres_test, back_test,model= model_rf,type="response")
+        # saveRDS(evl_rf[[kf]], file = paste(outdir_SDM,species_name,"_eval_rf",kf,".ascii",sep=''),ascii=TRUE)
+        # 
+        # tr_rf <- threshold(evl_rf[[kf]], 'spec_sens')
+        # saveRDS(tr_rf, file = paste(outdir_SDM,species_name,"_tr_rf",kf,".ascii",sep=''),ascii=TRUE)
+        # 
+        # predict_rf <- predict(model_rf, pred_df,ext=ext)
+        # saveRDS(predict_rf, file = paste(outdir_SDM,species_name,"_predict_rf_raw_",kf,".ascii",sep=''),ascii=TRUE)
+        # 
+        # predict_rf_pa <- predict_rf >tr_rf
+        # saveRDS(predict_rf_pa, file = paste(outdir_SDM,species_name,"_predict_rf_pa",kf,".ascii",sep=''),ascii=TRUE)
         
-        saveRDS(eval_rf[[i]], file = paste(outdir_SDM,species_name,"_eval_rf",i,".ascii",sep=''),ascii=TRUE)
-        tr_rf <- threshold(eval_rf[[i]], 'spec_sens')
-        saveRDS(tr_rf, file = paste(outdir_SDM,species_name,"_tr_rf",i,".ascii",sep=''),ascii=TRUE)
-        predict_rf <- predict(model_rf, as.data.frame(predictors),ext=ext)  
-        saveRDS(predict_rf, file = paste(outdir_SDM,species_name,"_predict_rf_raw_",i,".ascii",sep=''),ascii=TRUE)
-        plot(predict_rf)
-        predict_rf_pa <- predict_rf >tr_rf
-        plot(predict_rf_pa)
-        saveRDS(predict_rf_pa, file = paste(outdir_SDM,species_name,"_predict_rf_pa",i,".ascii",sep=''),ascii=TRUE)
-        
-        print(i)
+        print(evl_rf[[kf]])
       }
+      )
+      stopCluster(cl)
+      
       
       auc_rf <- sapply(eval_rf, function(x){slot(x, "auc")} )
       print(auc_rf)
