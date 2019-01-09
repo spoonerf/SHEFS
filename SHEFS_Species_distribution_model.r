@@ -161,7 +161,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
         bc <- bioclim(predictors,pres_train)
         evl_bc[[kf]] <- dismo:::evaluate(pres_test, backg_test, bc,predictors,type="response")
         
-        # saveRDS(evl_bc, file = paste(outdir_SDM,species_name,"_eval_bc_",kf,".ascii",sep=''),ascii=TRUE)
+        saveRDS(evl_bc[[kf]], file = paste(outdir_SDM,species_name,"_eval_bc_",kf,".ascii",sep=''),ascii=TRUE)
         # 
         # tr_bc <- threshold(evl_bc[[kf]], 'spec_sens')
         # saveRDS(tr_bc, file = paste(outdir_SDM,species_name,"_tr_bc_",kf, ".ascii",sep=''),ascii=TRUE)
@@ -176,6 +176,12 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       }
       )
       stopCluster(cl)
+      
+      eval_bc<-list()
+      for(kf in 1:k){
+        eval_bc[[kf]]<-readRDS(paste(outdir_SDM,species_name,"_eval_bc_",kf,".ascii",sep=''))  
+      }
+      
       
       auc_bc <- sapply(eval_bc, function(x){slot(x, "auc")} )
       print(auc_bc)
@@ -249,6 +255,16 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       
       stopCluster(cl)
       
+      #If you've run the model once already and just need the evaluation info:
+      
+      eval_glm<-list()
+      
+      for(kf in 1:k){
+        eval_glm[[kf]]<-readRDS(paste(outdir_SDM,species_name,"_eval_glm",kf,".ascii",sep=''))  
+      }
+      
+      
+      
       auc_glm <- sapply(eval_glm, function(x){slot(x, "auc")} )
       print(auc_glm)
       
@@ -282,7 +298,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
         
         evl_ma[[kf]] <- evaluate(pres_test, back_test,model= model_ma,x = predictors)
         
-        # saveRDS(evl_ma[[kf]], file = paste(outdir_SDM,species_name,"_eval_ma",kf,".ascii",sep=''),ascii=TRUE)
+        saveRDS(evl_ma[[kf]], file = paste(outdir_SDM,species_name,"_eval_ma",kf,".ascii",sep=''),ascii=TRUE)
         # tr_ma <- threshold(evl_ma[[kf]], 'spec_sens')
         # saveRDS(tr_ma, file = paste(outdir_SDM,species_name,"_tr_ma",kf,".ascii",sep=''),ascii=TRUE)
         # 
@@ -296,8 +312,13 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       }
       )
    
-  
       stopCluster(cl)
+      
+      eval_ma<-list()
+      
+      for(kf in 1:k){
+        eval_ma[[kf]]<-readRDS(paste(outdir_SDM,species_name,"_eval_ma",kf,".ascii",sep=''))  
+      }
       
       auc_ma <- sapply( eval_ma, function(x){slot(x, "auc")} )
       print(auc_ma)
@@ -330,7 +351,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
         #saveRDS(model_rf, file = paste(outdir_SDM,species_name,"_model_rf.ascii",sep=''),ascii=TRUE)
         
         evl_rf[[kf]] <- evaluate(pres_test, back_test,model= model_rf,type="response")
-        # saveRDS(evl_rf[[kf]], file = paste(outdir_SDM,species_name,"_eval_rf",kf,".ascii",sep=''),ascii=TRUE)
+        saveRDS(evl_rf[[kf]], file = paste(outdir_SDM,species_name,"_eval_rf",kf,".ascii",sep=''),ascii=TRUE)
         # 
         # tr_rf <- threshold(evl_rf[[kf]], 'spec_sens')
         # saveRDS(tr_rf, file = paste(outdir_SDM,species_name,"_tr_rf",kf,".ascii",sep=''),ascii=TRUE)
@@ -346,37 +367,18 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       )
       stopCluster(cl)
       
+      eval_rf<-list()
+      
+      for(kf in 1:k){
+        eval_rf[[kf]]<-readRDS(paste(outdir_SDM,species_name,"_eval_rf",kf,".ascii",sep=''))  
+      }
       
       auc_rf <- sapply(eval_rf, function(x){slot(x, "auc")} )
       print(auc_rf)
       
       rf_auc<-mean(auc_rf)
       
-      
-      model_rf <- randomForest(as.formula(model_rf1), data=envtrain, na.action=na.roughfix) 
-      saveRDS(model_rf, file = paste(outdir_SDM,species_name,"_model_rf.ascii",sep=''),ascii=TRUE)
-      
-      eval_rf <- evaluate(envtestpres, envtestbackg, model_rf)
-      saveRDS(eval_rf, file = paste(outdir_SDM,species_name,"_eval_rf.ascii",sep=''),ascii=TRUE)
-      print(eval_rf)
-      
-      tr_rf <- threshold(eval_rf, 'spec_sens')
-      saveRDS(tr_rf, file = paste(outdir_SDM,species_name,"_tr_rf.ascii",sep=''),ascii=TRUE)
-      print(tr_rf)
-      
-      predict_rf <- predict(predictors, model_rf, ext=ext)  
-      saveRDS(predict_rf, file = paste(outdir_SDM,species_name,"_predict_rf_raw.ascii",sep=''),ascii=TRUE)
-      plot(predict_rf)
-      print(predict_rf)
-      
-      predict_rf_pa <- predict_rf > tr_rf
-      plot(predict_rf_pa)
-      saveRDS(predict_rf_pa, file = paste(outdir_SDM,species_name,"_predict_rf_pa.ascii",sep=''),ascii=TRUE)
-      
-      plot(predict_rf)
-      points(occurrence_in$lon, occurrence_in$lat)
-      print(paste('Random forest done'))
-      
+
       # MODEL ENSEMBLE
       print(paste(' '))
       print(paste('++++++++++++++++++++++'))
@@ -387,7 +389,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       
       model_bc_all<-bioclim(predictors, occurrence_lonlat)
       
-      yy<-names(coef(model_glm1[[model_glm]]))[-1]
+      yy<-names(coef(model_glm))[-1]
       fla<-paste("pa ~", paste(yy, collapse="+"))
       model_glm_all<-glm(as.formula(fla),family=binomial(link = "logit"), data=env_all)
       
@@ -398,14 +400,14 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       predict_glm_all<- predict(predictors, model_glm_all, ext = ext)
       predict_glm_all <-raster:::calc(predict_glm_all, fun=function(x){ exp(x)/(1+exp(x))})
       predict_maxent_all<-predict(model_ma_all, predictors,ext=ext)  
-      predict_rf_all<-predict(model_rf_all, as.data.frame(predictors),ext=ext)  
+      predict_rf_all<-predict(predictors,model_rf_all, ext=ext)  
       
       
       all_models <- stack(predict_bioclim_all, predict_glm_all, predict_maxent_all, predict_rf_all)  
       names(all_models) <- c("BIOCLIM", "GLM", "MAXENT","RANDOM FOREST")
-      auc <- sapply(list(eval_bc, eval_glm, eval_ma, eval_rf), function(x) x@auc)
-      saveRDS(auc, file = paste(outdir_SDM,species_name,"_all_models_auc.ascii",sep=''),ascii=TRUE)
+      auc<-c(bc_auc, glm_auc,ma_auc ,rf_auc)
       w <- (auc-0.5)^2
+      saveRDS(auc, file = paste(outdir_SDM,species_name,"_all_models_auc.ascii",sep=''),ascii=TRUE)
       ensemble_raster <- weighted.mean( all_models, w)  
       plot(ensemble_raster)
       saveRDS(ensemble_raster, file = paste(outdir_SDM,species_name,"_ensemble_raster_raw.ascii",sep=''),ascii=TRUE)
@@ -434,7 +436,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       data(wrld_simpl)
       
       tiff(paste(outdir_SDM,species_name,'_ensemble_pa.tiff',sep=''))
-      plot(ensemble_raster,legend = FALSE, col = rev(terrain.colors(2)), main=paste('Weighted ensemble mean - ', species_name),xlab="longitude", ylab="latitude")
+      plot(ensemble_raster_pa,legend = FALSE, col = rev(terrain.colors(2)), main=paste('Weighted ensemble mean - ', species_name),xlab="longitude", ylab="latitude")
       plot(wrld_simpl, add=TRUE)
       legend("bottomleft", legend = c("Absence", "Presence"),box.col = "white", fill = rev(terrain.colors(2)))
       box()
