@@ -241,14 +241,14 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
               saveRDS(evl_glm[[kf]], file = paste(outdir_SDM,species_name,"_eval_glm_",kf,".ascii",sep=''),ascii=TRUE)
               # 
               # tr_glm <- threshold(evl_glm[[kf]], 'spec_sens')
-              # saveRDS(tr_glm, file = paste(outdir_SDM,species_name,"_tr_glm",kf,".ascii",sep=''),ascii=TRUE)
+              # saveRDS(tr_glm, file = paste(outdir_SDM,species_name,"_tr_glm_",kf,".ascii",sep=''),ascii=TRUE)
               # 
               # predict_glm <- predict(predictors, model_glm, ext=ext)   #adding in conversion back from logit space
               # predict_glm <-raster:::calc(predict_glm, fun=function(x){ exp(x)/(1+exp(x))}) 
-              # saveRDS( predict_glm, file = paste(outdir_SDM,species_name,"_predict_glm_raw",kf,".ascii",sep=''),ascii=TRUE)
+              # saveRDS( predict_glm, file = paste(outdir_SDM,species_name,"_predict_glm_raw_",kf,".ascii",sep=''),ascii=TRUE)
               # 
               # predict_glm_pa <- predict_glm > tr_glm
-              # saveRDS(predict_glm_pa, file = paste(outdir_SDM,species_name,"_predict_glm_pa",kf,".ascii",sep=''),ascii=TRUE)
+              # saveRDS(predict_glm_pa, file = paste(outdir_SDM,species_name,"_predict_glm_pa_",kf,".ascii",sep=''),ascii=TRUE)
               print(evl_glm[[kf]])
       }
       )
@@ -298,15 +298,15 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
         
         evl_ma[[kf]] <- evaluate(pres_test, back_test,model= model_ma,x = predictors)
         
-        saveRDS(evl_ma[[kf]], file = paste(outdir_SDM,species_name,"_eval_ma",kf,".ascii",sep=''),ascii=TRUE)
+        saveRDS(evl_ma[[kf]], file = paste(outdir_SDM,species_name,"_eval_ma_",kf,".ascii",sep=''),ascii=TRUE)
         # tr_ma <- threshold(evl_ma[[kf]], 'spec_sens')
-        # saveRDS(tr_ma, file = paste(outdir_SDM,species_name,"_tr_ma",kf,".ascii",sep=''),ascii=TRUE)
+        # saveRDS(tr_ma, file = paste(outdir_SDM,species_name,"_tr_ma_",kf,".ascii",sep=''),ascii=TRUE)
         # 
         # predict_maxent <- predict(model_ma, predictors,ext=ext)  
         # saveRDS(predict_maxent, file = paste(outdir_SDM,species_name,"_predict_maxent_raw_",kf,".ascii",sep=''),ascii=TRUE)
         # 
         # predict_maxent_pa <- predict_maxent >tr_ma
-        # saveRDS(predict_maxent_pa, file = paste(outdir_SDM,species_name,"_predict_maxent_pa",kf,".ascii",sep=''),ascii=TRUE)
+        # saveRDS(predict_maxent_pa, file = paste(outdir_SDM,species_name,"_predict_maxent_pa_",kf,".ascii",sep=''),ascii=TRUE)
         
         print(evl_ma[[kf]])
       }
@@ -351,10 +351,10 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
         #saveRDS(model_rf, file = paste(outdir_SDM,species_name,"_model_rf.ascii",sep=''),ascii=TRUE)
         
         evl_rf[[kf]] <- evaluate(pres_test, back_test,model= model_rf,type="response")
-        saveRDS(evl_rf[[kf]], file = paste(outdir_SDM,species_name,"_eval_rf",kf,".ascii",sep=''),ascii=TRUE)
+        saveRDS(evl_rf[[kf]], file = paste(outdir_SDM,species_name,"_eval_rf_",kf,".ascii",sep=''),ascii=TRUE)
         # 
         # tr_rf <- threshold(evl_rf[[kf]], 'spec_sens')
-        # saveRDS(tr_rf, file = paste(outdir_SDM,species_name,"_tr_rf",kf,".ascii",sep=''),ascii=TRUE)
+        # saveRDS(tr_rf, file = paste(outdir_SDM,species_name,"_tr_rf_",kf,".ascii",sep=''),ascii=TRUE)
         # 
         # predict_rf <- predict(model_rf, pred_df,ext=ext)
         # saveRDS(predict_rf, file = paste(outdir_SDM,species_name,"_predict_rf_raw_",kf,".ascii",sep=''),ascii=TRUE)
@@ -392,8 +392,8 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       yy<-names(coef(model_glm))[-1]
       fla<-paste("pa ~", paste(yy, collapse="+"))
       model_glm_all<-glm(as.formula(fla),family=binomial(link = "logit"), data=env_all)
-      
       model_ma_all <- maxent(predictors, occurrence_lonlat)
+      model_rf1 <- paste("pa ~", paste(names(predictors), collapse=" + "))
       model_rf_all <- randomForest(as.formula(model_rf1), data=env_all, na.action=na.roughfix) 
       
       predict_bioclim_all <- predict(predictors, model_bc_all,ext=ext, progress='') 
@@ -473,6 +473,18 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       predictor_LU_masked <- mask(predictors_LU,ensemble_raster_pa)  
       plot(predictor_LU_masked)
       
+      occurrence_in <- read.csv(paste(occurrence_dir, species[s], sep=''))
+      species_name <- substr(species[s],14,nchar(species[s])-4)   #this could be more reproducible although need to think of a way
+      coordinates(occurrence_in) <- ~lon+lat
+      crs(occurrence_in) <- "+proj=longlat +datum=WGS84 +no_defs"
+      
+      ext <- extent(occurrence_in)*1.2
+      print(paste(species_name,' occurrence records loaded'))
+      
+      # create data frame with presence/background data and predictor values
+      # occurence training and test set
+      occurrence_lonlat=cbind.data.frame(occurrence_in$lon,occurrence_in$lat) 
+      colnames(occurrence_lonlat) = c('lon', 'lat')
       
       envpres <- data.frame(extract(predictor_LU_masked, occurrence_lonlat))
       occurrence_lonlat<-occurrence_lonlat[-which(!complete.cases(envpres)),]
@@ -724,6 +736,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       model_bc_all<-bioclim(predictor_LU_masked, occurrence_lonlat)
       model_glm_all<- glm(pa ~ MODIS_LCType,family = binomial(link = "logit"), data=env_all)
       model_ma_all <- maxent(predictor_LU_masked, occurrence_lonlat)
+      model_rf1 <- paste("pa ~", paste(names(predictor_LU_masked), collapse=" + "))
       model_rf_all <- randomForest(as.formula(model_rf1), data=env_all, na.action=na.roughfix) 
       
       predict_bioclim_all <- predict(predictor_LU_masked, model_bc_all,ext=ext, progress='') 
