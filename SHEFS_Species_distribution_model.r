@@ -50,6 +50,10 @@ predictors_in<-paste(predictors_dir, predictors, sep="/")
 
 predictors_r <- lapply(predictors_in, raster)
 predictors <- stack(predictors_r)
+
+bioclim_layers<- c(1,4,5,6,12,15)
+preds<-predictors[[bioclim_layers]]
+
 print(paste('predictors loaded'))
 
 species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
@@ -152,14 +156,14 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       cl <- makeCluster((detectCores()-1), type='PSOCK')
       registerDoParallel(cl)
       clusterExport(cl,c('bioclim', 'evaluate', 'threshold', 'predict', 'backgr','group_pres', 'group_bg', 'evl_bc', 
-                         'outdir_SDM', 'species_name', 'predictors', 'ext', 'occurrence_lonlat'))
+                         'outdir_SDM', 'species_name', 'preds', 'ext', 'occurrence_lonlat'))
       
       eval_bc<-parLapply(cl, 1:k, function(kf){
         pres_train<-occurrence_lonlat[group_pres!=kf,]
         pres_test<-occurrence_lonlat[group_pres==kf,]
         backg_test<-backgr[group_bg==kf,]
-        bc <- bioclim(predictors,pres_train)
-        evl_bc[[kf]] <- dismo:::evaluate(pres_test, backg_test, bc,predictors,type="response")
+        bc <- bioclim(preds,pres_train)
+        evl_bc[[kf]] <- dismo:::evaluate(pres_test, backg_test, bc,preds,type="response")
         
         saveRDS(evl_bc[[kf]], file = paste(outdir_SDM,species_name,"_eval_bc_",kf,".ascii",sep=''),ascii=TRUE)
         # 
@@ -193,31 +197,34 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       print(paste('+++ GLM +++'))
       print(paste('+++++++++++'))
       
-      model_glm1=NULL
-      vars = names(predictors)
+      # model_glm1=NULL
+      # vars = names(predictors)
+      # 
+      # for(i in 1:length(vars)){
+      #   xx = combn(vars,i)
+      #   if(is.null(dim(xx))){
+      #     fla = paste("pa ~", paste(xx, collapse="+"))
+      #     model_glm1[[length(model_glm1)+1]]=glm(as.formula(fla),family=binomial(link = "logit"), data=env_all)
+      #   } else {
+      #     for(j in 1:dim(xx)[2]){
+      #       fla = paste("pa ~", paste(xx[1:dim(xx)[1],j], collapse="+"))
+      #       model_glm1[[length(model_glm1)+1]]=glm(as.formula(fla),family=binomial(link = "logit"), data=env_all) 
+      #     }
+      #   }
+      # }
+      # 
+      # AICs = NULL
+      # for(i in 1:length(model_glm1)){
+      #   AICs[i] = AIC(model_glm1[[i]])
+      # }
+      # 
+      # model_glm <- which(AICs==min(AICs))   
+      # 
+      # model_glm <- model_glm1[[model_glm]]
       
-      for(i in 1:length(vars)){
-        xx = combn(vars,i)
-        if(is.null(dim(xx))){
-          fla = paste("pa ~", paste(xx, collapse="+"))
-          model_glm1[[length(model_glm1)+1]]=glm(as.formula(fla),family=binomial(link = "logit"), data=env_all)
-        } else {
-          for(j in 1:dim(xx)[2]){
-            fla = paste("pa ~", paste(xx[1:dim(xx)[1],j], collapse="+"))
-            model_glm1[[length(model_glm1)+1]]=glm(as.formula(fla),family=binomial(link = "logit"), data=env_all) 
-          }
-        }
-      }
+      fla <- paste("pa ~", paste(names(preds), collapse="+"))
       
-      AICs = NULL
-      for(i in 1:length(model_glm1)){
-        AICs[i] = AIC(model_glm1[[i]])
-      }
-      
-      model_glm <- which(AICs==min(AICs))   
-      
-      model_glm <- model_glm1[[model_glm]]
-      
+      model_glm<- glm(as.formula(fla),family=binomial(link = "logit"), data=env_all)
       
       evl_glm<- list()
       
@@ -225,7 +232,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       registerDoParallel(cl)
       clusterExport(cl,c('evaluate', 'threshold', 'predict', 'envpres_pa', 
                          'envbackg_pa', 'group_pres', 'group_bg', 'model_glm', 'evl_glm', 
-                         'outdir_SDM', 'species_name', 'predictors', 'ext'))
+                         'outdir_SDM', 'species_name', 'preds', 'ext'))
       
       eval_glm<-parLapply(cl, 1:k, function(kf){
               pres_train<-envpres_pa[group_pres!=kf ,]
@@ -286,17 +293,17 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       registerDoParallel(cl)
       clusterExport(cl,c('maxent', 'evaluate', 'threshold', 'predict', 'occurrence_lonlat', 
                          'backgr', 'group_pres', 'group_bg','outdir_SDM', 'species_name', 
-                         'predictors', 'ext', 'evl_ma'))
+                         'preds', 'ext', 'evl_ma'))
       
       eval_ma<-parLapply(cl, 1:k, function(kf){
         pres_train<-occurrence_lonlat[group_pres!=kf ,]
         pres_test<-occurrence_lonlat[(group_pres==kf) ,]
         back_test<-backgr[(group_bg==kf),]
         back_train<-backgr[(group_bg!=kf),]
-        model_ma <- maxent(predictors, pres_train)#,l1_regularizer=0.7)
+        model_ma <- maxent(preds, pres_train)#,l1_regularizer=0.7)
         #saveRDS(model_ma, file = paste(outdir_SDM,species_name,"_model_ma_",kf,".ascii",sep=''),ascii=TRUE)
         
-        evl_ma[[kf]] <- evaluate(pres_test, back_test,model= model_ma,x = predictors)
+        evl_ma[[kf]] <- evaluate(pres_test, back_test,model= model_ma,x = preds)
         
         saveRDS(evl_ma[[kf]], file = paste(outdir_SDM,species_name,"_eval_ma_",kf,".ascii",sep=''),ascii=TRUE)
         # tr_ma <- threshold(evl_ma[[kf]], 'spec_sens')
@@ -346,7 +353,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
         back_test<-envbackg_pa[(group_bg==kf),]
         back_train<-envbackg_pa[(group_bg!=kf),]
         envtrain<-rbind(pres_train, back_train)
-        model_rf1 <- paste("pa ~", paste(names(predictors), collapse=" + "))
+        model_rf1 <- paste("pa ~", paste(names(preds), collapse=" + "))
         model_rf <- randomForest:::randomForest(as.formula(model_rf1), data=envtrain) 
         #saveRDS(model_rf, file = paste(outdir_SDM,species_name,"_model_rf.ascii",sep=''),ascii=TRUE)
         
@@ -387,20 +394,24 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       
       ##need to run the models again on the whole data set - rather than just the training 
       
-      model_bc_all<-bioclim(predictors, occurrence_lonlat)
+      # bioclim_layers<-c(1,4,5,6,12,15)
+      # 
+      # preds<-predictors[[bioclim_layers]]
+      # 
+      model_bc_all<-bioclim(preds, occurrence_lonlat)
       
       yy<-names(coef(model_glm))[-1]
       fla<-paste("pa ~", paste(yy, collapse="+"))
       model_glm_all<-glm(as.formula(fla),family=binomial(link = "logit"), data=env_all)
-      model_ma_all <- maxent(predictors, occurrence_lonlat)
-      model_rf1 <- paste("pa ~", paste(names(predictors), collapse=" + "))
+      model_ma_all <- maxent(preds, occurrence_lonlat)
+      model_rf1 <- paste("pa ~", paste(names(preds), collapse=" + "))
       model_rf_all <- randomForest(as.formula(model_rf1), data=env_all, na.action=na.roughfix) 
       
-      predict_bioclim_all <- predict(predictors, model_bc_all,ext=ext, progress='') 
-      predict_glm_all<- predict(predictors, model_glm_all, ext = ext)
+      predict_bioclim_all <- predict(preds, model_bc_all,ext=ext, progress='') 
+      predict_glm_all<- predict(preds, model_glm_all, ext = ext)
       predict_glm_all <-raster:::calc(predict_glm_all, fun=function(x){ exp(x)/(1+exp(x))})
-      predict_maxent_all<-predict(model_ma_all, predictors,ext=ext)  
-      predict_rf_all<-predict(predictors,model_rf_all, ext=ext)  
+      predict_maxent_all<-predict(model_ma_all, preds,ext=ext)  
+      predict_rf_all<-predict(preds,model_rf_all, ext=ext)  
       
       
       all_models <- stack(predict_bioclim_all, predict_glm_all, predict_maxent_all, predict_rf_all)  
@@ -445,6 +456,24 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       
       print(paste(species_name, 'DONE', sep=' '))
       #}
+      
+      
+      #########future predictions##############
+      
+      
+      fp_f<-list.files("H:/Vivienne/CMIP5/CMIP5_bioclim")
+      
+      models<-c("CanESM2", "HadGEM2-ES", "IPSL-CM5A-MR", "MPI-ESM-MR", "MRI-CGCM3")
+      years<-2006:2100
+      scenarios<-c("rcp26", "rcp85")
+      
+      all_proj<-expand.grid(models, years, scenarios)
+      
+      test<-raster(paste("H:/Vivienne/CMIP5/CMIP5_bioclim/",fp_f[grepl("rcp26",fp_f)][1], sep=""))
+
+      test<-raster(paste("H:/Vivienne/CMIP5/CMIP5_bioclim/",fp_f[grepl("TSMAX",fp_f)][1], sep=""))
+      
+      
       
       
       ####################################################################################
