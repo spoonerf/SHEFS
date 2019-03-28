@@ -51,7 +51,7 @@ predictors_in<-paste(predictors_dir, predictors, sep="/")
 predictors_r <- lapply(predictors_in, raster)
 predictors <- stack(predictors_r)
 
-bioclim_layers<- c(1,4,5,6,12,15)
+bioclim_layers<- c(1:6)
 preds<-predictors[[bioclim_layers]]
 
 print(paste('predictors loaded'))
@@ -345,7 +345,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       registerDoParallel(cl)
       clusterExport(cl,c('randomForest', 'evaluate', 'threshold', 'predict', 'envpres_pa', 
                          'envbackg_pa', 'group_pres', 'group_bg','outdir_SDM', 'species_name', 
-                         'predictors', 'ext', 'evl_rf'))
+                         'preds', 'ext', 'evl_rf'))
       
       eval_rf<-parLapply(cl, 1:k, function(kf){
         pres_train<-envpres_pa[group_pres!=kf ,]
@@ -460,20 +460,67 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       
       #########future predictions##############
       
+      path<-"H:/Vivienne/CMIP5/CMIP5_bioclim"
       
-      fp_f<-list.files("H:/Vivienne/CMIP5/CMIP5_bioclim")
+      fp_f<-list.files(path, pattern = "*grd")
       
       models<-c("CanESM2", "HadGEM2-ES", "IPSL-CM5A-MR", "MPI-ESM-MR", "MRI-CGCM3")
       years<-2006:2100
       scenarios<-c("rcp26", "rcp85")
       
       all_proj<-expand.grid(models, years, scenarios)
+      colnames(all_proj)<-c("models", "years", "scenarios")
       
-      test<-raster(paste("H:/Vivienne/CMIP5/CMIP5_bioclim/",fp_f[grepl("rcp26",fp_f)][1], sep=""))
+      
+      proj_folder_out<-paste(outdir_SDM, "proj_output/", sep="")    
+      
+      cl <- makeCluster((detectCores()-1), type='PSOCK')
+      registerDoParallel(cl)
+      clusterExport(cl,c('randomForest', 'predict','all_proj', 'fp_f', 'path','raster', 'stack', 'weighted.mean', 
+                         'writeRaster', 'model_bc_all', 'model_glm_all', 'model_ma_all', 'model_rf_all', 'ext', 
+                         'bc_auc', 'glm_auc','ma_auc' ,'rf_auc', 'proj_folder_out', 'species_name'))
+      
+      #parLapply(cl, 1:nrow(all_proj), function(pn){
+      clusterApply(cl, 1:nrow(all_proj), function(pn){
+        
+        model = all_proj$models[pn]
+        year = all_proj$years[pn]
+        scenario = all_proj$scenarios[pn]
+        
+        model_sel<-fp_f[grepl(model, fp_f)]
+        year_sel<-model_sel[grepl(year, model_sel)]
+        all_sel<-year_sel[grepl(scenario, year_sel)]
+       
+        pred_proj<-stack(paste(path, all_sel, sep = "/"))
+        names(pred_proj)<-all_sel
+        
+          
+        #projection layers have to have the same names as the layers the models were built with
+        
+        names(pred_proj)[grepl("MAP", names(pred_proj))]<-"new_CHELSA_annualprecip"
+        names(pred_proj)[grepl("MAT", names(pred_proj))]<-"new_CHELSA_meantemp"
+        names(pred_proj)[grepl("PCV", names(pred_proj))]<- "new_CHELSA_precipseasonality"
+        names(pred_proj)[grepl("TSMAX", names(pred_proj))]<- "new_CHELSA_tempmaxmax"
+        names(pred_proj)[grepl("TSMIN", names(pred_proj))]<- "new_CHELSA_tempminmin"
+        names(pred_proj)[grepl("TSD", names(pred_proj))]<- "new_CHELSA_tempseasonality"
 
-      test<-raster(paste("H:/Vivienne/CMIP5/CMIP5_bioclim/",fp_f[grepl("TSMAX",fp_f)][1], sep=""))
-      
-      
+        predict_bioclim_proj <- predict(pred_proj, model_bc_all,ext=ext, progress='')
+        predict_glm_proj<- predict(pred_proj, model_glm_all, ext = ext)
+        predict_glm_proj <-raster:::calc(predict_glm_proj, fun=function(x){ exp(x)/(1+exp(x))})
+        predict_maxent_proj <-predict(model_ma_all, pred_proj,ext=ext)
+        predict_rf_proj <-predict(pred_proj,model_rf_all, ext=ext)
+
+        all_models_proj <- stack(predict_bioclim_proj, predict_glm_proj, predict_maxent_proj, predict_rf_proj)
+        names(all_models_proj) <- c("BIOCLIM", "GLM", "MAXENT","RANDOM FOREST")
+        auc<-c(bc_auc, glm_auc,ma_auc ,rf_auc)
+        w <- (auc-0.5)^2
+        #saveRDS(auc, file = paste(outdir_SDM,species_name,"_all_models_auc.ascii",sep=''),ascii=TRUE)
+        ensemble_raster_proj <- weighted.mean(all_models_proj, w)
+        plot(ensemble_raster_proj)
+        writeRaster(ensemble_raster_proj, paste(proj_folder_out,species_name,"_", model,"_" ,year,"_",scenario,".tif", sep = ""), overwrite = TRUE)
+      }
+      )
+      stopCluster(cl)
       
       
       ####################################################################################
