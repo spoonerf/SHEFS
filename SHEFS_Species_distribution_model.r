@@ -523,7 +523,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       
      
         
-      clusterApply(cl, 5:20, function(pn){
+      clusterApply(cl, 1:nrow(all_proj), function(pn){
         model = all_proj$models[pn]
         year = all_proj$years[pn]
         scenario = all_proj$scenarios[pn]
