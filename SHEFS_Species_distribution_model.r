@@ -181,15 +181,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       )
       stopCluster(cl)
       
-      eval_bc<-list()
-      for(kf in 1:k){
-        eval_bc[[kf]]<-readRDS(paste(outdir_SDM,species_name,"_eval_bc_",kf,".ascii",sep=''))  
-      }
-      
-      
-      auc_bc <- sapply(eval_bc, function(x){slot(x, "auc")} )
-      print(auc_bc)
-      bc_auc<-mean(auc_bc)
+
     
       # GENERALIZED LINEAR MODEL
       print(paste(' '))
@@ -264,18 +256,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       
       #If you've run the model once already and just need the evaluation info:
       
-      eval_glm<-list()
-      
-      for(kf in 1:k){
-        eval_glm[[kf]]<-readRDS(paste(outdir_SDM,species_name,"_eval_glm_",kf,".ascii",sep=''))  
-      }
-      
-      
-      
-      auc_glm <- sapply(eval_glm, function(x){slot(x, "auc")} )
-      print(auc_glm)
-      
-      glm_auc<-mean(auc_glm)
+
       
       print(paste('GLM done'))
 
@@ -321,17 +302,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
    
       stopCluster(cl)
       
-      eval_ma<-list()
-      
-      for(kf in 1:k){
-        eval_ma[[kf]]<-readRDS(paste(outdir_SDM,species_name,"_eval_ma",kf,".ascii",sep=''))  
-      }
-      
-      auc_ma <- sapply( eval_ma, function(x){slot(x, "auc")} )
-      print(auc_ma)
-      
-      ma_auc<-mean(auc_ma)
-      
+
       # 
       # RANDOM FOREST
       print(paste(' '))
@@ -374,6 +345,52 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       )
       stopCluster(cl)
       
+      
+      
+      #########GETTING AUC VALUES
+      
+      ##AUC BIOCLIM
+      
+      eval_bc<-list()
+      for(kf in 1:k){
+        eval_bc[[kf]]<-readRDS(paste(outdir_SDM,species_name,"_eval_bc_",kf,".ascii",sep=''))  
+      }
+      
+      
+      auc_bc <- sapply(eval_bc, function(x){slot(x, "auc")} )
+      print(auc_bc)
+      bc_auc<-mean(auc_bc)
+      
+      ###AUC GLM
+      
+      eval_glm<-list()
+      
+      for(kf in 1:k){
+        eval_glm[[kf]]<-readRDS(paste(outdir_SDM,species_name,"_eval_glm_",kf,".ascii",sep=''))  
+      }
+      
+      
+      auc_glm <- sapply(eval_glm, function(x){slot(x, "auc")} )
+      print(auc_glm)
+      
+      glm_auc<-mean(auc_glm)
+      
+      
+      ##AUC MAXENT
+      
+      eval_ma<-list()
+      
+      for(kf in 1:k){
+        eval_ma[[kf]]<-readRDS(paste(outdir_SDM,species_name,"_eval_ma",kf,".ascii",sep=''))  
+      }
+      
+      auc_ma <- sapply( eval_ma, function(x){slot(x, "auc")} )
+      print(auc_ma)
+      
+      ma_auc<-mean(auc_ma)
+      
+      ##AUC RF
+      
       eval_rf<-list()
       
       for(kf in 1:k){
@@ -385,7 +402,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       
       rf_auc<-mean(auc_rf)
       
-
+      
       # MODEL ENSEMBLE
       print(paste(' '))
       print(paste('++++++++++++++++++++++'))
@@ -400,12 +417,13 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       # 
       model_bc_all<-bioclim(preds, occurrence_lonlat)
       
-      yy<-names(coef(model_glm))[-1]
+      yy<-names(preds)
       fla<-paste("pa ~", paste(yy, collapse="+"))
       model_glm_all<-glm(as.formula(fla),family=binomial(link = "logit"), data=env_all)
       model_ma_all <- maxent(preds, occurrence_lonlat)
       model_rf1 <- paste("pa ~", paste(names(preds), collapse=" + "))
       model_rf_all <- randomForest(as.formula(model_rf1), data=env_all, na.action=na.roughfix) 
+      
       
       predict_bioclim_all <- predict(preds, model_bc_all,ext=ext, progress='') 
       predict_glm_all<- predict(preds, model_glm_all, ext = ext)
@@ -460,12 +478,28 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       
       #########future predictions##############
       
+      save(model_bc_all,file = paste(outdir_SDM,species_name,"bioclim_model.rda",sep=''))
+      load(paste(outdir_SDM,species_name,"bioclim_model.rda",sep=''))
+      
+      save(model_glm_all,file = paste(outdir_SDM,species_name,"glm_model.rda",sep=''))
+      load(paste(outdir_SDM,species_name,"glm_model.rda",sep=''))
+      
+      save(model_ma_all,file = paste(outdir_SDM,species_name,"maxent_model.rda",sep=''))
+      load(paste(outdir_SDM,species_name,"maxent_model.rda",sep=''))
+      
+      save(model_rf_all,file = paste(outdir_SDM,species_name,"randomforest_model.rda",sep=''))
+      load(paste(outdir_SDM,species_name,"randomforest_model.rda",sep=''))
+      
+      
+      
       path<-"H:/Vivienne/CMIP5/CMIP5_bioclim"
       
       fp_f<-list.files(path, pattern = "*grd")
       
-      models<-c("CanESM2", "HadGEM2-ES", "IPSL-CM5A-MR", "MPI-ESM-MR", "MRI-CGCM3")
-      years<-2006:2100
+      #models<-c("CanESM2", "HadGEM2-ES", "IPSL-CM5A-MR", "MPI-ESM-MR", "MRI-CGCM3")
+      #not all predictors available for IPSL
+      models<-c("CanESM2", "HadGEM2-ES", "MPI-ESM-MR", "MRI-CGCM3")
+      years<-2006:2099
       scenarios<-c("rcp26", "rcp85")
       
       all_proj<-expand.grid(models, years, scenarios)
@@ -473,16 +507,23 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
       
       
       proj_folder_out<-paste(outdir_SDM, "proj_output/", sep="")    
+     
+      
+      proj_out<- list()
+      
       
       cl <- makeCluster((detectCores()-1), type='PSOCK')
       registerDoParallel(cl)
       clusterExport(cl,c('randomForest', 'predict','all_proj', 'fp_f', 'path','raster', 'stack', 'weighted.mean', 
                          'writeRaster', 'model_bc_all', 'model_glm_all', 'model_ma_all', 'model_rf_all', 'ext', 
-                         'bc_auc', 'glm_auc','ma_auc' ,'rf_auc', 'proj_folder_out', 'species_name'))
+                         'bc_auc', 'glm_auc','ma_auc' ,'rf_auc', 'proj_folder_out', 'species_name', 'proj_out'))
       
       #parLapply(cl, 1:nrow(all_proj), function(pn){
-      clusterApply(cl, 1:nrow(all_proj), function(pn){
+      #clusterApply(cl, 1:nrow(all_proj), function(pn){
+      
+     
         
+      clusterApply(cl, 5:20, function(pn){
         model = all_proj$models[pn]
         year = all_proj$years[pn]
         scenario = all_proj$scenarios[pn]
@@ -493,8 +534,7 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
        
         pred_proj<-stack(paste(path, all_sel, sep = "/"))
         names(pred_proj)<-all_sel
-        
-          
+  
         #projection layers have to have the same names as the layers the models were built with
         
         names(pred_proj)[grepl("MAP", names(pred_proj))]<-"new_CHELSA_annualprecip"
@@ -515,10 +555,10 @@ species <- as.character(list.files(occurrence_dir, pattern = 'csv'))
         auc<-c(bc_auc, glm_auc,ma_auc ,rf_auc)
         w <- (auc-0.5)^2
         #saveRDS(auc, file = paste(outdir_SDM,species_name,"_all_models_auc.ascii",sep=''),ascii=TRUE)
-        ensemble_raster_proj <- weighted.mean(all_models_proj, w)
-        plot(ensemble_raster_proj)
-        writeRaster(ensemble_raster_proj, paste(proj_folder_out,species_name,"_", model,"_" ,year,"_",scenario,".tif", sep = ""), overwrite = TRUE)
-      }
+        proj_out[[pn]] <- weighted.mean(all_models_proj, w)
+        writeRaster(proj_out[[pn]], paste(proj_folder_out,species_name,"_", model,"_" ,year,"_",scenario,".tif", sep = ""), overwrite = TRUE)
+        print(pn)
+        }
       )
       stopCluster(cl)
       
