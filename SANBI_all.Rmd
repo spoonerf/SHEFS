@@ -386,7 +386,9 @@ ng_dirs<-list.dirs(here::here("GBIF/Occurences/"))[2:15]
 
 all_sp_files<-list.files(ng_dirs, full.names = TRUE)
 length(all_sp_files)
+```
 
+```{r}
 small_file_remove<-function(file){
 
   rows<-nrow(fread(file, select = 1L))
@@ -399,8 +401,9 @@ small_file_remove<-function(file){
 }
 
 sf_rm_out<-lapply(all_sp_files, small_file_remove)
+```
 
-
+```{r}
 all_sp_files<-list.files(ng_dirs, full.names = TRUE)
 length(all_sp_files)
 ```
@@ -411,14 +414,16 @@ length(all_sp_files)
 
 unique_remove<-function(file){
 
-  csv<-read.csv(file)
+  csv_open<-read.csv(file, fill = TRUE, header = TRUE)
   
-  unique_rows<-csv %>% 
+  unique_rows<-as.numeric(
+    csv_open %>% 
     dplyr::select(scientificName, decimalLatitude, decimalLongitude) %>% 
     distinct() %>% 
-    tally
+    tally()
+  )
   
-  if (unique_rows < 10){
+ if (unique_rows < 10){
     file.remove(file)
   }
 
@@ -426,10 +431,14 @@ unique_remove<-function(file){
 }
 
 sf_rm_out<-lapply(all_sp_files, unique_remove)
+
+all_sp_files<-list.files(ng_dirs, full.names = TRUE)
 length(all_sp_files)
 
 
 ```
+
+```{r}
 #Third pass looking at sp where the points are well distributed?
 
 
