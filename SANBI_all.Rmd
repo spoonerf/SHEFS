@@ -346,7 +346,8 @@ gbif_downloader<-function(sp_binomial, network_group){
   decimalLongitude = '-29,53',
   limit = 200000, 
   fields = "minimal",
-  year = '2010,2019'
+  year = '2010,2019',
+  basisOfRecords = 'HUMAN_OBSERVATION'
   )
   
   occ_out$data<-unique(occ_out$data)
@@ -377,15 +378,58 @@ Map(gbif_downloader, sp_binomial = fil_sp$binomial[15:nrow(fil_sp)], network_gro
 
 #Removing files where there are less than 10 unique rows - excluding the key column
 
-```{r}
-
 #First pass removing those with less than 10 records
 
-nrow(fread("Batting.csv", select = 1L))
+```{r}
+
+ng_dirs<-list.dirs(here::here("GBIF/Occurences/"))[2:15]
+
+all_sp_files<-list.files(ng_dirs, full.names = TRUE)
+length(all_sp_files)
+
+small_file_remove<-function(file){
+
+  rows<-nrow(fread(file, select = 1L))
+  
+  if (rows < 10){
+    file.remove(file)
+  }
+
+  print(file)  
+}
+
+sf_rm_out<-lapply(all_sp_files, small_file_remove)
+
+
+all_sp_files<-list.files(ng_dirs, full.names = TRUE)
+length(all_sp_files)
+```
+
 
 #Second pass removing species with less than 10 unique records
+```{r}
+
+unique_remove<-function(file){
+
+  csv<-read.csv(file)
+  
+  unique_rows<-csv %>% 
+    dplyr::select(scientificName, decimalLatitude, decimalLongitude) %>% 
+    distinct() %>% 
+    tally
+  
+  if (unique_rows < 10){
+    file.remove(file)
+  }
+
+  print(file)  
+}
+
+sf_rm_out<-lapply(all_sp_files, unique_remove)
+length(all_sp_files)
 
 
+```
 #Third pass looking at sp where the points are well distributed?
 
 
