@@ -1,0 +1,395 @@
+---
+title: "SANBI Species Lists"
+author: "Fiona Spooner"
+date: "3 September 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(here)
+library(dplyr)
+library(knitr)
+library(tidyr)
+library(reshape2)
+library(sf)
+library(raster)
+library(vroom)
+library(rgdal)
+library(rgbif)
+library(dismo)
+
+```
+
+```{r}
+
+sanbi <- do.call(rbind,lapply(list.files(path = here::here("SANBI/Species_List/"), full.names = TRUE, pattern = "*.csv"), read.csv))
+
+sanbi$Binomial<-as.character(sanbi$Binomial)
+sanbi$Family<-as.character(sanbi$Family)
+sanbi$Order<-as.character(sanbi$Order)
+sanbi$network_group<-as.character(sanbi$network_group)
+
+kable(table(sanbi$Family))
+
+sanbi %>%
+  group_by(Order) %>% 
+  top_n(10, Records_sum) %>% 
+  arrange(Order, -Records_sum)
+
+#sanbi$network_group[sanbi$Binomial == "Orycteropus afer"]<- "Aardvark"
+sanbi$network_group[sanbi$Family == "Viperidae" | sanbi$Family == "Lamprophiidae" | 
+                      sanbi$Family == "Colubridae" | sanbi$Family == "Elapidae" | 
+                      sanbi$Family == "Pythonidae" | sanbi$Family == "Typhlopidae"]<- "Snakes"
+
+sanbi$network_group[sanbi$Order == "Rodentia"]<- "Rats"
+
+
+
+
+```
+
+```{r}
+
+gbif<- read.csv(here::here("GBIF/Species_List/All_GBIF_Species_List.csv"), stringsAsFactors = FALSE)
+
+gs<-gbif %>% 
+  filter(!is.na(species) & numberOfOccurrences >=10) %>% 
+  dplyr::select(kingdom,phylum, class, order, family, species,numberOfOccurrences) %>% 
+  filter(class == "Amphibia" | class == "Arachnida" |class == "Aves" | class == "Cycadopsida" | class == "Dacrymycetes" | class == "Gastropoda" | class == "Insecta" | class == "Lecanoromycetes" |class == "Liliopsida" | class == "Lycopodiopsida" | class == "Magnoliopsida" | class == "Mammalia" | class == "Pinopsida" | class == "Polypodiopsida" | class == "Reptilia") %>% 
+  arrange(-numberOfOccurrences) 
+
+
+gs$network_group<-NA
+gs$network_group[gs$class == "Mammalia"]<-"Mammals"
+gs$network_group[gs$order == "Lepidoptera"]<- "Lepidoptera"
+gs$network_group[gs$order == "Odonata"]<- "Odonata"
+gs$network_group[gs$class == "Gastropoda"]<- "Gastropods"
+gs$network_group[gs$order == "Hemiptera"]<- "Hemiptera"
+gs$network_group[gs$family == "Geotrupidae" | gs$family == "Scarabaeidae"]<- "Dungbeetles"
+gs$network_group[gs$order == "Anura"]<- "Frogs"
+gs$network_group[gs$order == "Neuroptera"]<- "Lacewings"
+gs$network_group[gs$class == "Reptilia"]<- "Reptiles"
+gs$network_group[gs$order == "Scorpiones"]<- "Scorpions"
+gs$network_group[gs$order == "Araneae"]<- "Spiders"
+gs$network_group[gs$species == "Orycteropus afer"]<- "Aardvark"
+gs$network_group[gs$class == "Aves"]<- "Birds"
+gs$network_group[gs$family == "Viperidae" | gs$family == "Lamprophiidae" | gs$family == "Colubridae" | 
+                   gs$family == "Elapidae" | gs$family == "Pythonidae" | gs$family == "Typhlopidae"]<- "Snakes"
+gs$network_group[gs$order == "Rodentia"]<- "Rats"
+
+
+gs$QDSs<-NA
+
+gs<-gs[,c(1:6,9,7,8)]
+
+colnames(gs)<-colnames(sanbi)
+
+
+
+```
+
+```{r}
+
+all_sp<-rbind(gs, sanbi)
+
+all_sp$Binomial<-as.character(all_sp$Binomial)
+
+all_sp<-all_sp %>% 
+  group_by(Binomial) %>% 
+  mutate(Records_sum = sum(Records_sum))%>%
+  filter(!is.na(network_group) & Order != "Cetacea") %>%
+  dplyr::select(Kingdom,Phylum,Class,Order,Family,Binomial, Records_sum, network_group) %>% 
+  distinct() %>% 
+  arrange(-Records_sum)%>% 
+  ungroup() 
+
+
+```
+
+```{r}
+
+bird_traits<-read.csv(here::here("Traits/birddiet.csv"))
+
+bird_diet<-bird_traits[bird_traits$Scientific %in% all_sp$Binomial,]
+
+bird_diet<-bird_diet[,c("Diet.5Cat","Scientific")]
+
+all_sp<-merge(all_sp, bird_diet, by.y = "Scientific", by.x = "Binomial", all = TRUE)
+
+all_sp$Diet.5Cat[is.na(all_sp$Diet.5Cat)]<-""
+
+all_sp$network_group<-paste(all_sp$network_group, all_sp$Diet.5Cat)
+
+
+```
+
+
+```{r}
+
+mamm_traits<-read.csv(here::here("Traits/mammdiet_elton.csv"))
+
+mamm_diet<-mamm_traits[mamm_traits$Scientific %in% all_sp$Binomial,]
+
+md<-mamm_diet[,c("Scientific", "Diet.Inv", "Diet.Vend", "Diet.Vect", 
+             "Diet.Vfish", "Diet.Vunk","Diet.Scav", "Diet.Fruit",
+             "Diet.Nect", "Diet.Seed", "Diet.PlantO")]
+
+melt_diet<-melt(md)
+
+main_diet<-melt_diet %>% 
+  group_by(Scientific) %>%
+  filter(value == max(value)) %>% 
+  summarise(diet_all = paste(variable, collapse = ","))
+
+
+all_sp<-merge(all_sp, main_diet, by.y = "Scientific", by.x = "Binomial", all = TRUE)
+
+all_sp$diet_all[is.na(all_sp$diet_all)]<-""
+
+all_sp$network_group<-paste(all_sp$network_group, all_sp$diet_all)
+
+
+table(all_sp$network_group)
+
+#write.csv(all_sp, "Network_species_record_counts.csv", row.names = FALSE)
+
+```
+
+
+#Combining with GBIF records
+
+```{r, eval = FALSE}
+
+# gbif <- do.call(rbind,lapply(list.files(path = here::here("GBIF/Occurences/"), full.names = TRUE, pattern = "*.csv"), vroom::vroom))
+#write.csv(gbif, "")
+
+
+gbif_za<-vroom("D:/Fiona/SHEFS/GBIF/Occurences/0003173-190918142434337_ZA_all.csv", delim = "\t")
+
+gbif_es<-vroom(here::here("GBIF/Occurences/0004701-190813142620410_ES.csv"), delim = "\t")
+
+gbif_ls<-vroom(here::here("GBIF/Occurences/0003206-190918142434337_LS.csv"), delim = "\t")
+
+
+gbif_all<-rbind(gbif_za, gbif_es, gbif_ls)
+
+gbif_fil<- gbif_all %>% 
+  dplyr::select(kingdom, phylum, class, order, family, genus, species, verbatimScientificName, decimalLongitude, decimalLatitude) %>% 
+  distinct()
+
+
+gbif_sp<-filter(gbif_all, !is.na(species) & !is.na(decimalLatitude) & !is.na(decimalLongitude))
+
+gbif_nsp<-filter(gbif_all, is.na(species) & !is.na(verbatimScientificName) & !is.na(decimalLatitude) & !is.na(decimalLongitude)) #come back to these later if needed 
+
+# 
+#mutate(binomial = tolower(verbatimScientificName), binomial = paste(toupper(substr(binomial, 1, 1)), substr(binomial, 2, nchar(binomial)), sep="")) %>% 
+#filter(!is.na(decimalLatitude) & !is.na(decimalLongitude)) %>% 
+#distinct()
+
+
+#write.csv(gbif_all, here::here("GBIF/Occurences/ZA_LS_ES_all.csv"))
+#write.csv(gbif_sp, here::here("GBIF/Occurences/ZA_LS_ES_touse.csv"))
+
+```
+
+```{r, eval = FALSE}
+
+gbif_tal<-gbif_fil %>% 
+  filter(gbif_fil$binomial %in% all_sp$Binomial) %>% 
+  group_by(binomial) %>% 
+  add_tally() %>% 
+  arrange(-n)
+
+gbif_net<-merge(gbif_tal, all_sp[,c("Binomial", "network_group")], by.x = "binomial", by.y = "Binomial")
+
+
+View(gbif_net %>% 
+  group_by(binomial) %>% 
+  add_tally() %>% 
+  #filter(n > 10) %>% 
+  select(binomial, network_group, n) %>% 
+  arrange(network_group) %>% 
+  distinct()
+)
+
+
+```
+
+
+```{r}
+
+gbif_fil<-vroom(here::here("GBIF/Occurences/ZA_LS_ES_touse.csv"), delim = ",")
+
+#bm<-st_read(here::here("WWF_Ecoregions/Species_Selection_Area_True.shp"))
+bm<-readOGR(dsn = here("WWF_Ecoregions/"), layer = "Species_Selection_Area_True")
+
+e<-extent(bm)
+
+gbif_fil<-gbif_fil %>% 
+  filter(decimalLongitude >= e[1] & decimalLongitude <= e[2] & decimalLatitude >= e[3] & decimalLatitude <= e[4])
+
+gb_xy<-dplyr::select(gbif_fil,c(decimalLongitude, decimalLatitude))
+
+gb_xy<-SpatialPoints(gb_xy)
+
+crs(gb_xy)<-crs(bm)
+
+# gb_xy<-st_as_sf(gb_xy)        
+# 
+
+in_biome<-over(gb_xy, bm , fn = NULL)
+in_biome_wh<-which(complete.cases(in_biome))
+
+gbif_in<-gbif_fil[in_biome_wh,]
+
+in_species<-gbif_in %>% 
+  dplyr::select(kingdom, phylum, class, order, family, genus,species) %>% 
+  mutate(binomial = species) %>%
+  dplyr::filter(class == "Mammalia" | class == "Gastropoda" | class == "Reptilia" | class == "Aves" | 
+           order == "Lepidoptera" | order == "Odonata" | order == "Hemiptera" | order == "Anura" | 
+           order == "Neuroptera" | order == "Scorpiones" | order == "Araneae" | order == "Rodentia" |
+           family == "Geotrupidae" | family == "Scarabaeidae" | family == "Viperidae" | family == "Lamprophiidae" |
+           family == "Colubridae"  | family == "Elapidae" | family == "Pythonidae" | family == "Typhlopidae" ) %>% 
+  distinct()
+
+
+in_species$genus<-vapply(strsplit(in_species$binomial," "), `[`, 1, FUN.VALUE=character(1))
+
+in_species$species<-vapply(strsplit(in_species$binomial," "), `[`, 2, FUN.VALUE=character(1))
+
+
+```
+
+```{r}
+
+in_species$network_group<-NA
+in_species$network_group[in_species$class == "Mammalia"]<-"Mammals"
+in_species$network_group[in_species$order == "Lepidoptera"]<- "Lepidoptera"
+in_species$network_group[in_species$order == "Odonata"]<- "Odonata"
+in_species$network_group[in_species$class == "Gastropoda"]<- "Gastropods"
+in_species$network_group[in_species$order == "Hemiptera"]<- "Hemiptera"
+in_species$network_group[in_species$family == "Geotrupidae" | in_species$family == "Scarabaeidae"]<- "Dungbeetles"
+in_species$network_group[in_species$order == "Anura"]<- "Frogs"
+in_species$network_group[in_species$order == "Neuroptera"]<- "Lacewings"
+in_species$network_group[in_species$class == "Reptilia"]<- "Reptiles"
+in_species$network_group[in_species$order == "Scorpiones"]<- "Scorpions"
+in_species$network_group[in_species$order == "Araneae"]<- "Spiders"
+in_species$network_group[in_species$species == "Orycteropus afer"]<- "Aardvark"
+in_species$network_group[in_species$class == "Aves"]<- "Birds"
+in_species$network_group[in_species$family == "Viperidae" | in_species$family == "Lamprophiidae" | in_species$family == "Colubridae" | 
+                   in_species$family == "Elapidae" | in_species$family == "Pythonidae" | in_species$family == "Typhlopidae"]<- "Snakes"
+in_species$network_group[in_species$order == "Rodentia"]<- "Rats"
+
+
+write.csv(in_species, here::here("GBIF/Occurences/species_in_biome_with_network_group.csv"))
+
+
+```
+
+```{r}
+
+#all_sp$Genus<-vapply(strsplit(all_sp$Binomial," "), `[`, 1, FUN.VALUE=character(1))
+
+#net_df<-merge(all_sp, in_species, by.x = c("Kingdom","Phylum","Class", "Order", "Family","Genus","Binomial"), by.y = c("kingdom", "phylum", "class", "order", "family","genus","binomial"), all = TRUE)
+
+```
+
+
+```{r}
+gbif_record<-function(genus, species){
+
+    records<-gbif(genus = genus, species = species, download = FALSE, geo = TRUE)
+    print(paste(genus, species, records, sep = " "))
+    return(records)
+  
+    }
+
+occ_out<-Map(gbif_record, genus =in_species$genus, species = in_species$species)
+occs<-do.call(rbind, occ_out)
+
+in_species$gbif_occs<-occs
+```
+
+```{r}
+
+dir_creator<-function(group){
+  dir.create(here::here("GBIF/Occurences/", group))
+  }
+
+lapply(unique(in_species$network_group),dir_creator)
+```
+
+
+```{r}
+# occ_download(
+#   "scientificName = Cisticola fulvicapilla", 
+#   "decimalLatitude < 0",
+#   "decimalLongitude > -29",
+#   "decimalLongitude < 53",
+#   user = "fspooner",
+#   pwd = "GBIFPA$$W0RD",
+#   email = "spoonerfiona@gmail.com",
+#   format = "SIMPLE_CSV"
+#   )
+
+
+gbif_downloader<-function(sp_binomial, network_group){
+
+  occ_out<-occ_search(
+  scientificName = sp_binomial, 
+  decimalLatitude = '-90,0',
+  decimalLongitude = '-29,53',
+  limit = 200000, 
+  fields = "minimal",
+  year = '2010,2019'
+  )
+  
+  occ_out$data<-unique(occ_out$data)
+  print(paste(network_group, sp_binomial, sep = " "))
+  write.csv(occ_out$data, paste0(here::here("GBIF/Occurences", network_group), "/", gsub(" ", "_",sp_binomial), ".csv"), row.names = FALSE)
+  
+}
+
+fil_sp<-in_species %>% 
+  filter(gbif_occs >= 10 & network_group != "Birds")  #Excluding birds for now and we aren't 
+                                                      #really interested in sp with less than 10 occurrences
+
+#Need to unique excluding the key column
+#Need to do a second pass on the downloaded data
+#to check there are more than 10 unique values
+
+
+
+Map(gbif_downloader, sp_binomial = fil_sp$binomial[15:nrow(fil_sp)], network_group = fil_sp$network_group[15:nrow(fil_sp)])
+
+
+
+
+#write.csv(fil_sp,  here::here("GBIF/Occurences/species_in_biome_with_network_group_nobird_tenplus.csv"))
+
+
+```
+
+#Removing files where there are less than 10 unique rows - excluding the key column
+
+```{r}
+
+#First pass removing those with less than 10 records
+
+nrow(fread("Batting.csv", select = 1L))
+
+#Second pass removing species with less than 10 unique records
+
+
+#Third pass looking at sp where the points are well distributed?
+
+
+
+
+
+```
