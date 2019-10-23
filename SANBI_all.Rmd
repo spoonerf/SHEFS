@@ -301,18 +301,26 @@ write.csv(in_species, here::here("GBIF/Occurences/species_in_biome_with_network_
 
 
 ```{r}
+in_species<-read.csv( here::here("GBIF/Occurences/species_in_biome_with_network_group.csv"), stringsAsFactors = FALSE)
+
+#birds<-filter(in_species, class == "Aves")
+
 gbif_record<-function(genus, species){
 
     records<-gbif(genus = genus, species = species, download = FALSE, geo = TRUE)
+    records<-
     print(paste(genus, species, records, sep = " "))
     return(records)
   
     }
 
-occ_out<-Map(gbif_record, genus =in_species$genus, species = in_species$species)
+occ_out<-Map(gbif_record, genus =in_species$genus[in_species$class == "Aves"], species = in_species$species[in_species$class == "Aves"])
 occs<-do.call(rbind, occ_out)
 
 in_species$gbif_occs<-occs
+
+#birds$gbif_occs<-occs
+
 ```
 
 ```{r}
@@ -347,7 +355,7 @@ gbif_downloader<-function(sp_binomial, network_group){
   limit = 200000, 
   fields = "minimal",
   year = '2010,2019',
-  basisOfRecords = 'HUMAN_OBSERVATION'
+  basisOfRecord = 'HUMAN_OBSERVATION'
   )
   
   occ_out$data<-unique(occ_out$data)
@@ -356,8 +364,8 @@ gbif_downloader<-function(sp_binomial, network_group){
   
 }
 
-fil_sp<-in_species %>% 
-  filter(gbif_occs >= 10 & network_group != "Birds")  #Excluding birds for now and we aren't 
+fil_sp<-birds %>% 
+  filter(gbif_occs <= 200000 & network_group == "Birds")  #Excluding birds for now and we aren't 
                                                       #really interested in sp with less than 10 occurrences
 
 #Need to unique excluding the key column
@@ -366,12 +374,11 @@ fil_sp<-in_species %>%
 
 
 
-Map(gbif_downloader, sp_binomial = fil_sp$binomial[15:nrow(fil_sp)], network_group = fil_sp$network_group[15:nrow(fil_sp)])
+Map(gbif_downloader, sp_binomial = fil_sp$binomial[7], network_group = fil_sp$network_group[7])
 
 
 
-
-#write.csv(fil_sp,  here::here("GBIF/Occurences/species_in_biome_with_network_group_nobird_tenplus.csv"))
+write.csv(fil_sp,  here::here("GBIF/Occurences/species_in_biome_with_network_group_nobird_tenplus.csv"), row.names = FALSE)
 
 
 ```
