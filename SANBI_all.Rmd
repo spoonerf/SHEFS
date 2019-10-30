@@ -48,9 +48,6 @@ sanbi$network_group[sanbi$Family == "Viperidae" | sanbi$Family == "Lamprophiidae
 
 sanbi$network_group[sanbi$Order == "Rodentia"]<- "Rats"
 
-
-
-
 ```
 
 ```{r}
