@@ -217,14 +217,11 @@ gbif_sel<-gbif_fil %>%
 
 gb_xy<-gbif_fil %>% 
   dplyr::select(decimalLongitude, decimalLatitude) %>% 
-  st_as_sf(.,coords = c("decimalLongitude", "decimalLatitude"), crs = crs(bm))
+  st_as_sf(.,coords = c("decimalLongitude", "decimalLatitude"), crs = crs(bm)) %>% 
+  st_intersection(., bm)
 
-gb_xy<-SpatialPoints(gb_xy)
 
-crs(gb_xy)<-crs(bm)
 
-# gb_xy<-st_as_sf(gb_xy)        
-# 
 
 in_biome<-over(gb_xy, bm , fn = NULL)
 in_biome_wh<-which(complete.cases(in_biome))
