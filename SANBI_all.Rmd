@@ -210,17 +210,11 @@ bm<-st_read(here::here("WWF_Ecoregions/Species_Selection_Area_True.shp"))
 e<-st_bbox(bm)
 ```
 
-Filtering out occurrence points that are outside the extent of the biome we're interested in
+Filtering out occurrence points that are outside the extent of the biome we're interested in. This code does a lot but also takes a long time!
 ```{r}
-# gbif_sel<-gbif_fil %>% 
-#   filter(decimalLongitude >= e[1] & decimalLongitude <= e[3] & decimalLatitude >= e[2] & decimalLatitude <= e[4])
-
 gb_sel<-gbif_fil %>% 
-  #dplyr::select(decimalLongitude, decimalLatitude) %>% 
    filter(decimalLongitude >= e[1] & decimalLongitude <= e[3] & decimalLatitude >= e[2] & decimalLatitude <= e[4]) %>% 
-  st_as_sf(.,coords = c("decimalLongitude", "decimalLatitude"), crs = crs(bm)) %>% 
-  st_intersection(., bm) %>% 
-  dplyr::select(kingdom, phylum, class, order, family, genus,species) %>% 
+   dplyr::select(kingdom, phylum, class, order, family, genus,species, decimalLongitude, decimalLatitude) %>% 
   mutate(binomial = species) %>%
   dplyr::filter(class == "Mammalia" | class == "Gastropoda" | class == "Reptilia" | class == "Aves" | 
            order == "Lepidoptera" | order == "Odonata" | order == "Hemiptera" | order == "Anura" | 
@@ -228,6 +222,22 @@ gb_sel<-gbif_fil %>%
            family == "Geotrupidae" | family == "Scarabaeidae" | family == "Viperidae" | family == "Lamprophiidae" |
            family == "Colubridae"  | family == "Elapidae" | family == "Pythonidae" | family == "Typhlopidae" ) %>% 
   distinct()
+
+
+
+
+sel_xy<-st_as_sf(gb_sel,coords = c("decimalLongitude", "decimalLatitude"), crs = crs(bm)) 
+
+st_join(sel_xy, bm, join = st_intersects)
+
+# %>% 
+#   st_intersection(., bm) %>% 
+ 
+
+gb_sel$genus<-vapply(strsplit(gb_sel$binomial," "), `[`, 1, FUN.VALUE=character(1))
+
+gb_sel$species<-vapply(strsplit(gb_sel$binomial," "), `[`, 2, FUN.VALUE=character(1))
+
 ```
 
 ```{r}
@@ -247,9 +257,6 @@ in_species<-gbif_in %>%
   distinct()
 
 
-in_species$genus<-vapply(strsplit(in_species$binomial," "), `[`, 1, FUN.VALUE=character(1))
-
-in_species$species<-vapply(strsplit(in_species$binomial," "), `[`, 2, FUN.VALUE=character(1))
 
 
 ```
