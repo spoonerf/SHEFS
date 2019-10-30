@@ -212,17 +212,25 @@ e<-st_bbox(bm)
 
 Filtering out occurrence points that are outside the extent of the biome we're interested in
 ```{r}
-gbif_sel<-gbif_fil %>% 
-  filter(decimalLongitude >= e[1] & decimalLongitude <= e[3] & decimalLatitude >= e[2] & decimalLatitude <= e[4])
+# gbif_sel<-gbif_fil %>% 
+#   filter(decimalLongitude >= e[1] & decimalLongitude <= e[3] & decimalLatitude >= e[2] & decimalLatitude <= e[4])
 
-gb_xy<-gbif_fil %>% 
-  dplyr::select(decimalLongitude, decimalLatitude) %>% 
+gb_sel<-gbif_fil %>% 
+  #dplyr::select(decimalLongitude, decimalLatitude) %>% 
+   filter(decimalLongitude >= e[1] & decimalLongitude <= e[3] & decimalLatitude >= e[2] & decimalLatitude <= e[4]) %>% 
   st_as_sf(.,coords = c("decimalLongitude", "decimalLatitude"), crs = crs(bm)) %>% 
-  st_intersection(., bm)
+  st_intersection(., bm) %>% 
+  dplyr::select(kingdom, phylum, class, order, family, genus,species) %>% 
+  mutate(binomial = species) %>%
+  dplyr::filter(class == "Mammalia" | class == "Gastropoda" | class == "Reptilia" | class == "Aves" | 
+           order == "Lepidoptera" | order == "Odonata" | order == "Hemiptera" | order == "Anura" | 
+           order == "Neuroptera" | order == "Scorpiones" | order == "Araneae" | order == "Rodentia" |
+           family == "Geotrupidae" | family == "Scarabaeidae" | family == "Viperidae" | family == "Lamprophiidae" |
+           family == "Colubridae"  | family == "Elapidae" | family == "Pythonidae" | family == "Typhlopidae" ) %>% 
+  distinct()
+```
 
-
-
-
+```{r}
 in_biome<-over(gb_xy, bm , fn = NULL)
 in_biome_wh<-which(complete.cases(in_biome))
 
