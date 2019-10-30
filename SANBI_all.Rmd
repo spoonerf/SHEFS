@@ -6,54 +6,38 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 ```
 
 ```{r}
 library(here)
+library(dismo)
 library(dplyr)
 library(knitr)
-library(tidyr)
 library(reshape2)
-library(sf)
 library(raster)
-library(vroom)
-library(rgdal)
 library(rgbif)
-library(dismo)
-
-
+library(rgdal)
+library(sf)
+library(tidyr)
+library(vroom)
 ```
+
+The input here is a combined list of all the species listed in the groups of interest in the SANBI Atlases https://www.sanbi.org/resources/atlases/
+
+```{r}
+sanbi <- do.call(rbind,lapply(list.files(path = here::here("SANBI/Species_List/"), full.names = TRUE, pattern = "*.csv"), vroom::vroom))
+```
+
+Also inputting all of the species listed with occurences in South Africa, Lesotho and Swazliand 
 
 ```{r}
 
-sanbi <- do.call(rbind,lapply(list.files(path = here::here("SANBI/Species_List/"), full.names = TRUE, pattern = "*.csv"), read.csv))
-
-sanbi$Binomial<-as.character(sanbi$Binomial)
-sanbi$Family<-as.character(sanbi$Family)
-sanbi$Order<-as.character(sanbi$Order)
-sanbi$network_group<-as.character(sanbi$network_group)
-
-kable(table(sanbi$Family))
-
-sanbi %>%
-  group_by(Order) %>% 
-  top_n(10, Records_sum) %>% 
-  arrange(Order, -Records_sum)
-
-#sanbi$network_group[sanbi$Binomial == "Orycteropus afer"]<- "Aardvark"
-sanbi$network_group[sanbi$Family == "Viperidae" | sanbi$Family == "Lamprophiidae" | 
-                      sanbi$Family == "Colubridae" | sanbi$Family == "Elapidae" | 
-                      sanbi$Family == "Pythonidae" | sanbi$Family == "Typhlopidae"]<- "Snakes"
-
-sanbi$network_group[sanbi$Order == "Rodentia"]<- "Rats"
-
+gbif<- vroom::vroom(here::here("GBIF/Species_List/All_GBIF_Species_List.csv"))
 ```
 
+Just selecting out species that are in the groups we're interested in and then adding a column with this network group in 
 ```{r}
-
-gbif<- read.csv(here::here("GBIF/Species_List/All_GBIF_Species_List.csv"), stringsAsFactors = FALSE)
-
 gs<-gbif %>% 
   filter(!is.na(species) & numberOfOccurrences >=10) %>% 
   dplyr::select(kingdom,phylum, class, order, family, species,numberOfOccurrences) %>% 
@@ -82,11 +66,10 @@ gs$network_group[gs$order == "Rodentia"]<- "Rats"
 
 gs$QDSs<-NA
 
-gs<-gs[,c(1:6,9,7,8)]
+gs<-gs %>% 
+  dplyr::select("kingdom", "phylum","class", "order", "family","species", "QDSs", "numberOfOccurrences", "network_group") 
 
 colnames(gs)<-colnames(sanbi)
-
-
 
 ```
 
@@ -175,6 +158,11 @@ gbif_ls<-vroom(here::here("GBIF/Occurences/0003206-190918142434337_LS.csv"), del
 
 gbif_all<-rbind(gbif_za, gbif_es, gbif_ls)
 
+
+```
+
+
+```{r}
 gbif_fil<- gbif_all %>% 
   dplyr::select(kingdom, phylum, class, order, family, genus, species, verbatimScientificName, decimalLongitude, decimalLatitude) %>% 
   distinct()
@@ -198,7 +186,7 @@ gbif_nsp<-filter(gbif_all, is.na(species) & !is.na(verbatimScientificName) & !is
 ```{r, eval = FALSE}
 
 gbif_tal<-gbif_fil %>% 
-  filter(gbif_fil$binomial %in% all_sp$Binomial) %>% 
+  filter(binomial %in% all_sp$Binomial) %>% 
   group_by(binomial) %>% 
   add_tally() %>% 
   arrange(-n)
