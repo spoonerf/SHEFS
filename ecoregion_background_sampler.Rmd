@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 ```
 
 ```{r}
@@ -59,6 +59,8 @@ background_sampler<-function(occ_file, no_pnts){
 
 ```
 
+
+Checking the background points are where you expect for a random species
 ```{r}
 rsp<-runif(1,min = 1, max = length(occ_files))
 
