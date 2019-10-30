@@ -67,9 +67,16 @@ rsp<-runif(1,min = 1, max = length(occ_files))
 check<-background_sampler(occ_files[rsp], 10000)
 pnt_buff<-0.15
 
+xy<-read_csv(occ_files[rsp]) %>%
+  select("decimalLongitude", "decimalLatitude") %>% 
+  distinct() %>% 
+  st_as_sf(.,coords =c("decimalLongitude", "decimalLatitude"), crs = 4326) %>% 
+  st_intersection(., ecoreg)
+
 ggplot(data = ecoreg)+
   geom_sf(aes(fill = ECO_NAME, alpha = 0.6))+
   geom_sf(data = check, alpha = 0.05)+
+  geom_sf(data = xy, colour = "red", size = 2)+
   coord_sf(xlim = c(st_bbox(check)[1] - pnt_buff, st_bbox(check)[3]+pnt_buff), ylim = c(st_bbox(check)[2] - pnt_buff, st_bbox(check)[4]+pnt_buff))+
   theme_bw()+ 
   theme(legend.position = "none")+
