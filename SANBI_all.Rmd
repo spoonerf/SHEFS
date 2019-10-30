@@ -88,8 +88,9 @@ all_sp<-all_sp %>%
   arrange(-Records_sum)%>% 
   ungroup() 
 
-
 ```
+
+Getting the bird diet data from the eltontraits db (Wilman, 2014) and including this in the networkm group column - doing it a bit clumsily but it's not v important right now.
 
 ```{r}
 
@@ -105,9 +106,9 @@ all_sp$Diet.5Cat[is.na(all_sp$Diet.5Cat)]<-""
 
 all_sp$network_group<-paste(all_sp$network_group, all_sp$Diet.5Cat)
 
-
 ```
 
+For the mammal data I picked out the predominant diet groups and included this in the network_group variable. There was an already column existing for this in the bird data set. The mammal data is also from the eltontraits database. 
 
 ```{r}
 
@@ -141,7 +142,7 @@ table(all_sp$network_group)
 ```
 
 
-#Combining with GBIF records
+Combining with GBIF occurrence records - rather than just the species names we have above
 
 ```{r, eval = FALSE}
 
@@ -149,11 +150,11 @@ table(all_sp$network_group)
 #write.csv(gbif, "")
 
 
-gbif_za<-vroom("D:/Fiona/SHEFS/GBIF/Occurences/0003173-190918142434337_ZA_all.csv", delim = "\t")
+gbif_za<-vroom::vroom("D:/Fiona/SHEFS/GBIF/Occurences/0003173-190918142434337_ZA_all.csv", delim = "\t")
 
-gbif_es<-vroom(here::here("GBIF/Occurences/0004701-190813142620410_ES.csv"), delim = "\t")
+gbif_es<-vroom::vroom(here::here("GBIF/Occurences/0004701-190813142620410_ES.csv"), delim = "\t")
 
-gbif_ls<-vroom(here::here("GBIF/Occurences/0003206-190918142434337_LS.csv"), delim = "\t")
+gbif_ls<-vroom::vroom(here::here("GBIF/Occurences/0003206-190918142434337_LS.csv"), delim = "\t")
 
 
 gbif_all<-rbind(gbif_za, gbif_es, gbif_ls)
