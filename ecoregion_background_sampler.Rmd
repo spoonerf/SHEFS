@@ -1,0 +1,78 @@
+---
+title: "Background Points"
+author: "Fiona Spooner"
+date: "30/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(here)
+library(lwgeom)
+library(readr)
+#library(rgdal)
+library(sf)
+
+
+```
+
+
+```{r}
+ecoreg<-st_read(here::here("WWF_Ecoregions/official/wwf_terr_ecos.shp"))
+
+ecoreg<-ecoreg %>% 
+    select(OBJECTID, ECO_NAME)   ##just selecting out the columns we're interested in 
+
+occ_files<-list.files(here::here("GBIF/Occurences/Network_Groups/"), pattern = "*.csv", full.names = TRUE, recursive = TRUE)  
+
+head(read.csv(occ_files[1]))
+
+```
+
+
+
+```{r}
+
+background_sampler<-function(occ_file, no_pnts){
+  
+  xy<-read_csv(occ_file) %>%
+    select("decimalLongitude", "decimalLatitude") %>% 
+    distinct() %>% 
+    st_as_sf(.,coords =c("decimalLongitude", "decimalLatitude"), crs = 4326) %>% 
+    st_intersection(., ecoreg)
+
+    sf_int<-st_intersection(xy, ecoreg)
+
+        
+  bkg_ecoreg<-ecoreg %>% 
+    filter(ECO_NAME %in% sf_int$ECO_NAME) %>% 
+    st_sample(., size = no_pnts, type = "random")
+  
+  print(basename(occ_file))
+  return(bkg_ecoreg)  
+}
+
+```
+
+```{r}
+rsp<-runif(1,min = 1, max = length(occ_files))
+
+check<-background_sampler(occ_files[rsp], 10000)
+pnt_buff<-0.15
+
+ggplot(data = ecoreg)+
+  geom_sf(aes(fill = ECO_NAME, alpha = 0.6))+
+  geom_sf(data = check, alpha = 0.05)+
+  coord_sf(xlim = c(st_bbox(check)[1] - pnt_buff, st_bbox(check)[3]+pnt_buff), ylim = c(st_bbox(check)[2] - pnt_buff, st_bbox(check)[4]+pnt_buff))+
+  theme_bw()+ 
+  theme(legend.position = "none")+
+  ggtitle(gsub(".csv","",paste0(basename(occ_files[rsp]))))
+
+```
+
+
