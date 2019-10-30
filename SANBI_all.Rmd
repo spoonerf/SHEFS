@@ -164,46 +164,38 @@ gbif_all<-rbind(gbif_za, gbif_es, gbif_ls)
 
 
 ```{r}
-gbif_fil<- gbif_all %>% 
-  dplyr::select(kingdom, phylum, class, order, family, genus, species, verbatimScientificName, decimalLongitude, decimalLatitude) %>% 
+
+gbif_fil <- gbif_all %>%
+  dplyr::select(
+    kingdom,
+    phylum,
+    class,
+    order,
+    family,
+    genus,
+    species,
+    verbatimScientificName,
+    decimalLongitude,
+    decimalLatitude
+  ) %>%
+  filter(
+    !is.na(species) &
+      !is.na(verbatimScientificName) &
+      !is.na(decimalLatitude) & !is.na(decimalLongitude)
+  ) %>%
   distinct()
 
-
-gbif_sp<-filter(gbif_all, !is.na(species) & !is.na(decimalLatitude) & !is.na(decimalLongitude))
-
-gbif_nsp<-filter(gbif_all, is.na(species) & !is.na(verbatimScientificName) & !is.na(decimalLatitude) & !is.na(decimalLongitude)) #come back to these later if needed 
-
+# gbif_sp<-filter(gbif_all, !is.na(species) & !is.na(decimalLatitude) & !is.na(decimalLongitude))
+# 
+# gbif_nsp<-filter(gbif_all, is.na(species) & !is.na(verbatimScientificName) & !is.na(decimalLatitude) & !is.na(decimalLongitude)) #come back to these later if needed 
 # 
 #mutate(binomial = tolower(verbatimScientificName), binomial = paste(toupper(substr(binomial, 1, 1)), substr(binomial, 2, nchar(binomial)), sep="")) %>% 
 #filter(!is.na(decimalLatitude) & !is.na(decimalLongitude)) %>% 
 #distinct()
 
-
 #write.csv(gbif_all, here::here("GBIF/Occurences/ZA_LS_ES_all.csv"))
-#write.csv(gbif_sp, here::here("GBIF/Occurences/ZA_LS_ES_touse.csv"))
 
-```
-
-```{r, eval = FALSE}
-
-gbif_tal<-gbif_fil %>% 
-  filter(binomial %in% all_sp$Binomial) %>% 
-  group_by(binomial) %>% 
-  add_tally() %>% 
-  arrange(-n)
-
-gbif_net<-merge(gbif_tal, all_sp[,c("Binomial", "network_group")], by.x = "binomial", by.y = "Binomial")
-
-
-View(gbif_net %>% 
-  group_by(binomial) %>% 
-  add_tally() %>% 
-  #filter(n > 10) %>% 
-  select(binomial, network_group, n) %>% 
-  arrange(network_group) %>% 
-  distinct()
-)
-
+write.csv(gbif_fil, here::here("GBIF/Occurences/ZA_LS_ES_touse.csv"))
 
 ```
 
@@ -212,15 +204,20 @@ View(gbif_net %>%
 
 gbif_fil<-vroom(here::here("GBIF/Occurences/ZA_LS_ES_touse.csv"), delim = ",")
 
-#bm<-st_read(here::here("WWF_Ecoregions/Species_Selection_Area_True.shp"))
-bm<-readOGR(dsn = here("WWF_Ecoregions/"), layer = "Species_Selection_Area_True")
+bm<-st_read(here::here("WWF_Ecoregions/Species_Selection_Area_True.shp"))
+#bm<-readOGR(dsn = here("WWF_Ecoregions/"), layer = "Species_Selection_Area_True")
 
-e<-extent(bm)
+e<-st_bbox(bm)
+```
 
-gbif_fil<-gbif_fil %>% 
-  filter(decimalLongitude >= e[1] & decimalLongitude <= e[2] & decimalLatitude >= e[3] & decimalLatitude <= e[4])
+Filtering out occurrence points that are outside the extent of the biome we're interested in
+```{r}
+gbif_sel<-gbif_fil %>% 
+  filter(decimalLongitude >= e[1] & decimalLongitude <= e[3] & decimalLatitude >= e[2] & decimalLatitude <= e[4])
 
-gb_xy<-dplyr::select(gbif_fil,c(decimalLongitude, decimalLatitude))
+gb_xy<-gbif_fil %>% 
+  dplyr::select(decimalLongitude, decimalLatitude) %>% 
+  st_as_sf(.,coords = c("decimalLongitude", "decimalLatitude"), crs = crs(bm))
 
 gb_xy<-SpatialPoints(gb_xy)
 
