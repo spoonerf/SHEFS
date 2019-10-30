@@ -39,19 +39,20 @@ head(read.csv(occ_files[1]))
 ```
 
 
+The function is in two stages, the first stage pulls out the unique longitude and latitude species occurrence points and identifies which ecoregions they are in.
+
+The second stage creates a set number (no_pnts) of random points in these ecoregions which can be used as background points. 
 
 ```{r}
 
 background_sampler <- function(occ_file, no_pnts) {
-  xy <- read_csv(occ_file) %>%
+  sf_int <- read_csv(occ_file) %>%
     select("decimalLongitude", "decimalLatitude") %>%
     distinct() %>%
     st_as_sf(.,
              coords = c("decimalLongitude", "decimalLatitude"),
              crs = 4326) %>%
     st_intersection(., ecoreg)
-  
-  sf_int <- st_intersection(xy, ecoreg)
   
   bkg_ecoreg <- ecoreg %>%
     filter(ECO_NAME %in% sf_int$ECO_NAME) %>%
